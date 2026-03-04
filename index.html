@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lasy App</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Captura erros ANTES do React montar (incl. falha de carregamento do script). Tag estática abaixo permite ao Vite reescrever o src no build (deploy). -->
+    <script>
+      (function () {
+        var root = document.getElementById('root');
+        var shown = false;
+        function getMessage(err) {
+          if (!err) return 'Erro desconhecido';
+          if (err.message) return err.message;
+          if (err.reason && (err.reason.message || err.reason.toString)) return err.reason.message || err.reason.toString();
+          return String(err);
+        }
+        function getStack(err) {
+          if (err && err.stack) return err.stack;
+          if (err && err.error && err.error.stack) return err.error.stack;
+          if (err && err.reason && err.reason.stack) return err.reason.stack;
+          return '';
+        }
+        function getErrorText(msg, stack, filename) {
+          var t = 'Erro antes do app carregar:\n\n' + msg;
+          if (filename) t += '\nArquivo: ' + filename;
+          if (stack) t += '\n\nStack:\n' + stack;
+          return t;
+        }
+        function showPreMountError(err, filename) {
+          if (!root || root.children.length > 0 || shown) return;
+          shown = true;
+          var msg = getMessage(err);
+          var stack = getStack(err);
+          if (err && err.error) stack = getStack(err.error) || stack;
+          try {
+            window.parent.postMessage({ type: 'console-log', level: 'error', message: msg, stack: stack }, '*');
+          } catch (_) {}
+          var errorText = getErrorText(msg, stack, filename);
+          root.innerHTML =
+            '<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;font-family:system-ui,sans-serif;background:#fafafa;color:#171717">' +
+              '<div style="max-width:36rem;width:100%;background:#fff;border:1px solid #e5e5e5;border-radius:10px;box-shadow:0 4px 6px rgba(0,0,0,.07);overflow:hidden">' +
+                '<div style="padding:16px 20px;border-bottom:1px solid #e5e5e5;text-align:center">' +
+                  '<span style="color:#dc2626;font-weight:600">Erro de sintaxe / carregamento</span>' +
+                  '<p style="margin:8px 0 0;font-size:13px;color:#737373">O app falhou antes de iniciar (ex.: erro no main.tsx)</p>' +
+                '</div>' +
+                '<div style="padding:16px 20px">' +
+                  '<pre id="lasy-pre-error-message" style="margin:0;font-size:12px;font-family:ui-monospace,monospace;white-space:pre-wrap;word-break:break-all;background:#f5f5f5;padding:12px;border-radius:6px;border:1px solid #e5e5e5;max-height:200px;overflow:auto">' +
+                    escapeHtml(msg) + (filename ? '\n\nArquivo: ' + escapeHtml(filename) : '') +
+                  '</pre>' +
+                '</div>' +
+                '<div style="padding:12px 20px;border-top:1px solid #e5e5e5;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
+                  '<button type="button" id="lasy-pre-copy" style="padding:8px 14px;font-size:13px;border:1px solid #d4d4d4;border-radius:6px;background:#fff;cursor:pointer">Copiar</button>' +
+                  '<button type="button" id="lasy-pre-send" style="padding:8px 14px;font-size:13px;border:none;border-radius:6px;background:#171717;color:#fff;cursor:pointer">Enviar para IA</button>' +
+                  '<button type="button" id="lasy-pre-reload" style="padding:8px 14px;font-size:13px;border:1px solid #d4d4d4;border-radius:6px;background:#f5f5f5;cursor:pointer">Recarregar</button>' +
+                '</div>' +
+              '</div>' +
+            '</div>';
+          root.querySelector('#lasy-pre-copy').onclick = function () {
+            navigator.clipboard.writeText(errorText).then(function () {
+              var btn = root.querySelector('#lasy-pre-copy');
+              if (btn) { btn.textContent = 'Copiado!'; setTimeout(function () { btn.textContent = 'Copiar'; }, 2000); }
+            });
+          };
+          root.querySelector('#lasy-pre-send').onclick = function () {
+            var md = '**Erro na Preview (antes do app carregar):** ' + escapeHtml(msg) + '\n\n**Tipo:** `Sintaxe / Carregamento`\n\n';
+            if (filename) md += '**Arquivo:** `' + escapeHtml(filename) + '`\n\n';
+            if (stack) md += '**Stack:**\n```text\n' + escapeHtml(stack.slice(0, 500)) + '\n```\n\n';
+            try {
+              window.parent.postMessage({ type: 'send-error-to-ai', message: md }, '*');
+            } catch (_) {}
+            var btn = root.querySelector('#lasy-pre-send');
+            if (btn) { btn.textContent = 'Enviado!'; btn.disabled = true; }
+          };
+          root.querySelector('#lasy-pre-reload').onclick = function () { window.location.reload(); };
+        }
+        function escapeHtml(s) {
+          if (!s) return '';
+          var div = document.createElement('div');
+          div.textContent = s;
+          return div.innerHTML;
+        }
+        // Erro global: exceções no app antes do React montar + falha de carregamento do script (404, sintaxe, etc.)
+        window.addEventListener('error', function (e) {
+          var filename = e.filename || (e.target && e.target.src) || '';
+          var err = e.error;
+          if (!err && (e.message || e.target)) {
+            err = new Error(e.message || 'Falha ao carregar o script: ' + (e.target && e.target.src ? e.target.src : 'main'));
+          }
+          if (err) showPreMountError(err, filename);
+        }, true);
+        window.addEventListener('unhandledrejection', function (e) {
+          showPreMountError(e.reason);
+        });
+      })();
+    </script>
+    <!-- Tag estática: Vite reescreve src no build para /assets/index-xxx.js (deploy funciona). Falhas de carregamento disparam o listener "error" acima. -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
