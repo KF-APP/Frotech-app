@@ -22,7 +22,6 @@ import {
   Cell,
   LineChart,
   Line,
-  Legend,
 } from 'recharts';
 import { BarChart3, Download, FileText, TrendingDown, Route, DollarSign, Truck, Users } from 'lucide-react';
 import { mockViagens, mockDespesas, mockMotoristas, mockCaminhoes, kmPorDia, despesasPorCategoria, custoPorKmEvol } from '../../data/mockData';

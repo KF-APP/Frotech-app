@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import type { User, AuthState, UserType } from '../types';
+import type { AuthState, UserType } from '../types';
 import { mockUsers, mockMotoristas, CREDENCIAIS_TESTE } from '../data/mockData';
 
 interface AuthContextType extends AuthState {

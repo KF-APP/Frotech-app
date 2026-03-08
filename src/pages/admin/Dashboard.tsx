@@ -18,7 +18,6 @@ import {
 } from 'recharts';
 import {
   Truck,
-  Users,
   Route,
   DollarSign,
   Fuel,

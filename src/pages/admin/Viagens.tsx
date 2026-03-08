@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +45,7 @@ function MapaRota({ viagem }: { viagem: Viagem }) {
             ))}
             {/* Rota */}
             <polyline
-              points={viagem.rota.map((p, i) => {
+              points={viagem.rota.map((_p, i) => {
                 const x = 30 + (i / (viagem.rota.length - 1)) * 340;
                 const y = 100 + Math.sin(i * 0.8) * 30;
                 return `${x},${y}`;
