@@ -129,5 +129,80 @@ export function useViagens(motoristaId?: string) {
     return data || [];
   };
 
-  return { viagens, loading, fetchViagens, iniciarViagem, finalizarViagem, salvarPontoGPS, buscarPontosGPS };
+  const excluirViagem = async (id: string) => {
+    const { error } = await supabase.from('viagens').delete().eq('id', id);
+    if (error) {
+      toast.error('Erro ao excluir viagem');
+      return { success: false };
+    }
+    toast.success('Viagem removida!');
+    await fetchViagens();
+    return { success: true };
+  };
+
+  const atualizarViagem = async (id: string, dados: {
+    kmTotal?: number;
+    tempoTotal?: number;
+    origem?: string;
+    destino?: string;
+    status?: 'em_andamento' | 'concluida' | 'cancelada';
+  }) => {
+    const { error } = await supabase
+      .from('viagens')
+      .update({
+        km_total: dados.kmTotal,
+        tempo_total: dados.tempoTotal,
+        origem: dados.origem,
+        destino: dados.destino,
+        status: dados.status,
+        ...(dados.status === 'concluida' ? { data_fim: new Date().toISOString() } : {}),
+      })
+      .eq('id', id);
+
+    if (error) {
+      toast.error('Erro ao atualizar viagem');
+      return { success: false };
+    }
+    toast.success('Viagem atualizada!');
+    await fetchViagens();
+    return { success: true };
+  };
+
+  const criarViagemManual = async (dados: {
+    motoristaId: string;
+    motoristaNome: string;
+    caminhaoId: string;
+    caminhaoPlaca: string;
+    kmTotal?: number;
+    tempoTotal?: number;
+    origem?: string;
+    destino?: string;
+    status: 'concluida' | 'cancelada';
+    dataInicio: string;
+  }) => {
+    const { error } = await supabase.from('viagens').insert({
+      motorista_id: dados.motoristaId,
+      motorista_nome: dados.motoristaNome,
+      caminhao_id: dados.caminhaoId,
+      caminhao_placa: dados.caminhaoPlaca,
+      km_total: dados.kmTotal || null,
+      tempo_total: dados.tempoTotal || null,
+      origem: dados.origem || null,
+      destino: dados.destino || null,
+      status: dados.status,
+      data_inicio: dados.dataInicio,
+      data_fim: dados.status === 'concluida' ? new Date().toISOString() : null,
+      admin_id: user?.id || null,
+    });
+
+    if (error) {
+      toast.error('Erro ao registrar viagem');
+      return { success: false };
+    }
+    toast.success('Viagem registrada!');
+    await fetchViagens();
+    return { success: true };
+  };
+
+  return { viagens, loading, fetchViagens, iniciarViagem, finalizarViagem, salvarPontoGPS, buscarPontosGPS, excluirViagem, atualizarViagem, criarViagemManual };
 }

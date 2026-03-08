@@ -109,17 +109,25 @@ export function useDespesas(viagemId?: string) {
     return { success: true };
   };
 
-  const atualizarDespesa = async (id: string, dados: Partial<Despesa>) => {
+  const atualizarDespesa = async (id: string, dados: {
+    tipoDespesa?: TipoDespesa;
+    valor?: number;
+    descricao?: string;
+    data?: string;
+    caminhaoId?: string;
+    viagemId?: string;
+  }) => {
+    const update: Record<string, unknown> = {};
+    if (dados.tipoDespesa !== undefined) update.tipo_despesa = dados.tipoDespesa;
+    if (dados.valor !== undefined) update.valor = dados.valor;
+    if (dados.descricao !== undefined) update.descricao = dados.descricao;
+    if (dados.data !== undefined) update.data = dados.data;
+    if (dados.caminhaoId !== undefined) update.caminhao_id = dados.caminhaoId || null;
+    if (dados.viagemId !== undefined) update.viagem_id = dados.viagemId || null;
+
     const { error } = await supabase
       .from('despesas')
-      .update({
-        tipo_despesa: dados.tipoDespesa,
-        valor: dados.valor,
-        descricao: dados.descricao,
-        data: dados.data,
-        caminhao_id: dados.caminhaoId || null,
-        viagem_id: dados.viagemId || null,
-      })
+      .update(update)
       .eq('id', id);
 
     if (error) {

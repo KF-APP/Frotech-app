@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Receipt, Plus, Search, Truck, Calendar, User, Filter, Trash2, Upload, ImagePlus, X } from 'lucide-react';
+import { Receipt, Plus, Search, Truck, Calendar, User, Filter, Trash2, Upload, ImagePlus, X, Pencil } from 'lucide-react';
 import type { TipoDespesa } from '../../types';
 import { formatarMoeda, formatarData, labelTipoDespesa } from '../../utils/formatters';
 import { useDespesas } from '@/hooks/useDespesas';
@@ -44,8 +44,10 @@ const TIPO_CORES: Record<string, string> = {
   outros: 'bg-muted text-muted-foreground',
 };
 
+import type { Despesa } from '../../types';
+
 export default function Despesas() {
-  const { despesas, loading, criarDespesa, excluirDespesa } = useDespesas();
+  const { despesas, loading, criarDespesa, atualizarDespesa, excluirDespesa } = useDespesas();
   const { caminhoes } = useCaminhoes();
   const { viagens } = useViagens();
   const [busca, setBusca] = useState('');
@@ -63,6 +65,44 @@ export default function Despesas() {
   const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
   const [comprovantePreview, setComprovantePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Edição de despesa
+  const [despesaParaEditar, setDespesaParaEditar] = useState<Despesa | null>(null);
+  const [formEditar, setFormEditar] = useState({
+    tipoDespesa: '' as TipoDespesa | '',
+    valor: '',
+    descricao: '',
+    data: '',
+    caminhaoId: '',
+    viagemId: '',
+  });
+
+  const abrirEditar = (d: Despesa) => {
+    setDespesaParaEditar(d);
+    setFormEditar({
+      tipoDespesa: d.tipoDespesa,
+      valor: d.valor.toString(),
+      descricao: d.descricao,
+      data: d.data.split('T')[0],
+      caminhaoId: d.caminhaoId || '',
+      viagemId: d.viagemId || '',
+    });
+  };
+
+  const salvarEdicao = async () => {
+    if (!despesaParaEditar || !formEditar.tipoDespesa || !formEditar.valor || !formEditar.descricao) return;
+    setSalvando(true);
+    await atualizarDespesa(despesaParaEditar.id, {
+      tipoDespesa: formEditar.tipoDespesa as TipoDespesa,
+      valor: Number(formEditar.valor),
+      descricao: formEditar.descricao,
+      data: new Date(formEditar.data).toISOString(),
+      caminhaoId: formEditar.caminhaoId || undefined,
+      viagemId: formEditar.viagemId || undefined,
+    });
+    setSalvando(false);
+    setDespesaParaEditar(null);
+  };
 
   const filtradas = despesas.filter(d => {
     const matchBusca = d.descricao.toLowerCase().includes(busca.toLowerCase()) ||
@@ -213,7 +253,7 @@ export default function Despesas() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2 shrink-0">
                   <div className="text-right">
                     <p className="font-bold">{formatarMoeda(d.valor)}</p>
                     {d.comprovanteUrl && (
@@ -230,7 +270,15 @@ export default function Despesas() {
                     )}
                   </div>
                   <button
+                    className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                    title="Editar despesa"
+                    onClick={() => abrirEditar(d)}
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                  </button>
+                  <button
                     className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
+                    title="Excluir despesa"
                     onClick={() => excluir(d.id)}
                   >
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
@@ -248,6 +296,88 @@ export default function Despesas() {
           <p className="text-muted-foreground">Nenhuma despesa encontrada</p>
         </div>
       )}
+
+      {/* Dialog editar despesa */}
+      <Dialog open={!!despesaParaEditar} onOpenChange={() => setDespesaParaEditar(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Despesa</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Tipo de despesa *</Label>
+              <Select value={formEditar.tipoDespesa} onValueChange={(v) => setFormEditar(f => ({ ...f, tipoDespesa: v as TipoDespesa }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TIPOS_DESPESA.map(t => (
+                    <SelectItem key={t} value={t}>{labelTipoDespesa(t)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Valor (R$) *</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0,00"
+                  value={formEditar.valor}
+                  onChange={(e) => setFormEditar(f => ({ ...f, valor: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Data *</Label>
+                <Input
+                  type="date"
+                  value={formEditar.data}
+                  onChange={(e) => setFormEditar(f => ({ ...f, data: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Descrição *</Label>
+              <Input
+                placeholder="Descreva a despesa..."
+                value={formEditar.descricao}
+                onChange={(e) => setFormEditar(f => ({ ...f, descricao: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Caminhão</Label>
+              <Select value={formEditar.caminhaoId || 'nenhum'} onValueChange={(v) => setFormEditar(f => ({ ...f, caminhaoId: v === 'nenhum' ? '' : v }))}>
+                <SelectTrigger><SelectValue placeholder="Nenhum" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nenhum">Nenhum</SelectItem>
+                  {caminhoes.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.placa} — {c.modelo}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Viagem relacionada</Label>
+              <Select value={formEditar.viagemId || 'nenhuma'} onValueChange={(v) => setFormEditar(f => ({ ...f, viagemId: v === 'nenhuma' ? '' : v }))}>
+                <SelectTrigger><SelectValue placeholder="Nenhuma" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nenhuma">Nenhuma</SelectItem>
+                  {viagens.filter(v => v.status === 'concluida').map(v => (
+                    <SelectItem key={v.id} value={v.id}>
+                      {v.motoristaNome} — {formatarData(v.dataInicio)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDespesaParaEditar(null)}>Cancelar</Button>
+            <Button onClick={salvarEdicao} disabled={salvando}>
+              {salvando ? 'Salvando...' : 'Salvar alterações'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog nova despesa */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
