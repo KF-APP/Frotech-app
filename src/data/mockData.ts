@@ -42,6 +42,7 @@ export const mockCaminhoes: Caminhao[] = [
     totalKm: 48500,
     totalDespesas: 28750.50,
     totalViagens: 42,
+    valorDiaria: 0,
   },
   {
     id: 'cam-2',
@@ -53,6 +54,7 @@ export const mockCaminhoes: Caminhao[] = [
     totalKm: 62300,
     totalDespesas: 41200.00,
     totalViagens: 56,
+    valorDiaria: 0,
   },
   {
     id: 'cam-3',
@@ -64,6 +66,7 @@ export const mockCaminhoes: Caminhao[] = [
     totalKm: 31200,
     totalDespesas: 19800.75,
     totalViagens: 28,
+    valorDiaria: 0,
   },
 ];
 

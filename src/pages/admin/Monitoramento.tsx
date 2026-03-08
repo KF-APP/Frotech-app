@@ -164,7 +164,6 @@ export default function Monitoramento() {
           ) : (
             <div className="space-y-3">
               {viagensEmAndamento.map(v => {
-                const motorista = motoristas.find(m => m.id === v.motoristaId);
                 const caminhao = caminhoes.find(c => c.id === v.caminhaoId);
                 const despesasViagem = despesasPorViagem[v.id] || 0;
                 const duracaoMin = Math.floor((Date.now() - new Date(v.dataInicio).getTime()) / 60000);
