@@ -12,6 +12,16 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -19,7 +29,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Receipt, Plus, Search, Truck, Calendar, User, Filter, Trash2, Upload, ImagePlus, X, Pencil } from 'lucide-react';
-import type { TipoDespesa } from '../../types';
+import type { TipoDespesa, Despesa } from '../../types';
 import { formatarMoeda, formatarData, labelTipoDespesa } from '../../utils/formatters';
 import { useDespesas } from '@/hooks/useDespesas';
 import { useCaminhoes } from '@/hooks/useCaminhoes';
@@ -44,14 +54,13 @@ const TIPO_CORES: Record<string, string> = {
   outros: 'bg-muted text-muted-foreground',
 };
 
-import type { Despesa } from '../../types';
-
 export default function Despesas() {
   const { despesas, loading, criarDespesa, atualizarDespesa, excluirDespesa } = useDespesas();
   const { caminhoes } = useCaminhoes();
   const { viagens } = useViagens();
   const [busca, setBusca] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('todos');
+  const [filtroCaminhao, setFiltroCaminhao] = useState('todos');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({
@@ -77,6 +86,10 @@ export default function Despesas() {
     viagemId: '',
   });
 
+  // Exclusão com confirmação
+  const [despesaParaExcluir, setDespesaParaExcluir] = useState<Despesa | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
+
   const abrirEditar = (d: Despesa) => {
     setDespesaParaEditar(d);
     setFormEditar({
@@ -96,7 +109,7 @@ export default function Despesas() {
       tipoDespesa: formEditar.tipoDespesa as TipoDespesa,
       valor: Number(formEditar.valor),
       descricao: formEditar.descricao,
-      data: new Date(formEditar.data).toISOString(),
+      data: new Date(formEditar.data + 'T12:00:00').toISOString(),
       caminhaoId: formEditar.caminhaoId || undefined,
       viagemId: formEditar.viagemId || undefined,
     });
@@ -104,11 +117,20 @@ export default function Despesas() {
     setDespesaParaEditar(null);
   };
 
+  const confirmarExcluir = async () => {
+    if (!despesaParaExcluir) return;
+    setExcluindo(true);
+    await excluirDespesa(despesaParaExcluir.id);
+    setExcluindo(false);
+    setDespesaParaExcluir(null);
+  };
+
   const filtradas = despesas.filter(d => {
     const matchBusca = d.descricao.toLowerCase().includes(busca.toLowerCase()) ||
       d.criadoPorNome.toLowerCase().includes(busca.toLowerCase());
     const matchTipo = filtroTipo === 'todos' || d.tipoDespesa === filtroTipo;
-    return matchBusca && matchTipo;
+    const matchCaminhao = filtroCaminhao === 'todos' || d.caminhaoId === filtroCaminhao;
+    return matchBusca && matchTipo && matchCaminhao;
   });
 
   const totalFiltrado = filtradas.reduce((acc, d) => acc + d.valor, 0);
@@ -121,7 +143,7 @@ export default function Despesas() {
       tipoDespesa: form.tipoDespesa as TipoDespesa,
       valor: Number(form.valor),
       descricao: form.descricao,
-      data: new Date(form.data).toISOString(),
+      data: new Date(form.data + 'T12:00:00').toISOString(),
       caminhaoId: form.caminhaoId,
       viagemId: form.viagemId || undefined,
       criadoPor: 'admin',
@@ -135,10 +157,6 @@ export default function Despesas() {
     if (comprovantePreview) URL.revokeObjectURL(comprovantePreview);
     setComprovantePreview(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
-  };
-
-  const excluir = async (id: string) => {
-    await excluirDespesa(id);
   };
 
   const getCaminhaoPlaca = (id?: string) => caminhoes.find(c => c.id === id)?.placa || '';
@@ -170,7 +188,7 @@ export default function Despesas() {
         </Button>
       </div>
 
-      {/* Resumo */}
+      {/* Resumo por categoria */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {['combustivel', 'manutencao', 'pedagio', 'outros'].map(tipo => {
           const total = despesas.filter(d => {
@@ -201,7 +219,7 @@ export default function Despesas() {
           />
         </div>
         <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-          <SelectTrigger className="w-full sm:w-48">
+          <SelectTrigger className="w-full sm:w-44">
             <Filter className="w-4 h-4 mr-2" />
             <SelectValue />
           </SelectTrigger>
@@ -209,6 +227,18 @@ export default function Despesas() {
             <SelectItem value="todos">Todos os tipos</SelectItem>
             {TIPOS_DESPESA.map(t => (
               <SelectItem key={t} value={t}>{labelTipoDespesa(t)}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={filtroCaminhao} onValueChange={setFiltroCaminhao}>
+          <SelectTrigger className="w-full sm:w-44">
+            <Truck className="w-4 h-4 mr-2" />
+            <SelectValue placeholder="Todos os caminhões" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os caminhões</SelectItem>
+            {caminhoes.map(c => (
+              <SelectItem key={c.id} value={c.id}>{c.placa} — {c.modelo}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -279,7 +309,7 @@ export default function Despesas() {
                   <button
                     className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
                     title="Excluir despesa"
-                    onClick={() => excluir(d.id)}
+                    onClick={() => setDespesaParaExcluir(d)}
                   >
                     <Trash2 className="w-3.5 h-3.5 text-destructive" />
                   </button>
@@ -296,6 +326,30 @@ export default function Despesas() {
           <p className="text-muted-foreground">Nenhuma despesa encontrada</p>
         </div>
       )}
+
+      {/* AlertDialog confirmar exclusão */}
+      <AlertDialog open={!!despesaParaExcluir} onOpenChange={() => setDespesaParaExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir despesa?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A despesa <strong>{despesaParaExcluir?.descricao}</strong> de{' '}
+              <strong>{despesaParaExcluir ? formatarMoeda(despesaParaExcluir.valor) : ''}</strong> será excluída permanentemente.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmarExcluir}
+              disabled={excluindo}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {excluindo ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Dialog editar despesa */}
       <Dialog open={!!despesaParaEditar} onOpenChange={() => setDespesaParaEditar(null)}>

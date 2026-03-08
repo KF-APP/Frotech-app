@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,25 +13,41 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Users, Plus, Search, Phone, Mail, Truck, Route, TrendingDown, Pencil, Trash2 } from 'lucide-react';
+import { Users, Plus, Search, Phone, Mail, Truck, Route, TrendingDown, DollarSign, Pencil, Trash2 } from 'lucide-react';
 import type { Motorista } from '../../types';
-import { formatarKm } from '../../utils/formatters';
+import { formatarKm, formatarMoeda } from '../../utils/formatters';
 import { useMotoristas } from '@/hooks/useMotoristas';
 import { useCaminhoes } from '@/hooks/useCaminhoes';
+import { useViagens } from '@/hooks/useViagens';
+import { useDespesas } from '@/hooks/useDespesas';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Motoristas() {
   const { motoristas, loading, criarMotorista, atualizarMotorista, excluirMotorista } = useMotoristas();
   const { caminhoes } = useCaminhoes();
+  const { viagens } = useViagens();
+  const { despesas } = useDespesas();
   const [busca, setBusca] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editando, setEditando] = useState<Motorista | null>(null);
+  const [motoristaPraExcluir, setMotoristaPraExcluir] = useState<Motorista | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({
     nome: '',
@@ -40,6 +56,23 @@ export default function Motoristas() {
     senha: '',
     caminhaoId: '',
   });
+
+  // Stats por motorista calculados em tempo real cruzando viagens e despesas
+  const statsMotorista = useMemo(() => {
+    const map: Record<string, { km: number; viagens: number; despesas: number }> = {};
+    for (const m of motoristas) {
+      const viagensMotorista = viagens.filter(v => v.motoristaId === m.id && v.status === 'concluida');
+      const kmTotal = viagensMotorista.reduce((acc, v) => acc + (v.kmTotal || 0), 0);
+      const idsViagens = new Set(viagensMotorista.map(v => v.id));
+      const despesasMotorista = despesas.filter(d =>
+        (d.viagemId && idsViagens.has(d.viagemId)) ||
+        (m.caminhaoId && d.caminhaoId === m.caminhaoId)
+      );
+      const totalDespesas = despesasMotorista.reduce((acc, d) => acc + d.valor, 0);
+      map[m.id] = { km: kmTotal, viagens: viagensMotorista.length, despesas: totalDespesas };
+    }
+    return map;
+  }, [motoristas, viagens, despesas]);
 
   const filtrados = motoristas.filter(m =>
     m.nome.toLowerCase().includes(busca.toLowerCase()) ||
@@ -84,8 +117,12 @@ export default function Motoristas() {
     setDialogOpen(false);
   };
 
-  const excluir = async (id: string) => {
-    await excluirMotorista(id);
+  const confirmarExcluir = async () => {
+    if (!motoristaPraExcluir) return;
+    setExcluindo(true);
+    await excluirMotorista(motoristaPraExcluir.id);
+    setExcluindo(false);
+    setMotoristaPraExcluir(null);
   };
 
   const getCaminhaoPlaca = (caminhaoId?: string) => {
@@ -134,6 +171,8 @@ export default function Motoristas() {
         {filtrados.map(mot => {
           const caminhaoPlaca = getCaminhaoPlaca(mot.caminhaoId);
           const initials = mot.nome.split(' ').map(n => n[0]).slice(0, 2).join('');
+          const stats = statsMotorista[mot.id] || { km: 0, viagens: 0, despesas: 0 };
+          const custoKm = stats.km > 0 ? stats.despesas / stats.km : 0;
 
           return (
             <Card key={mot.id} className="hover:shadow-md transition-shadow">
@@ -166,7 +205,7 @@ export default function Motoristas() {
                     </button>
                     <button
                       className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
-                      onClick={() => excluir(mot.id)}
+                      onClick={() => setMotoristaPraExcluir(mot)}
                     >
                       <Trash2 className="w-3.5 h-3.5 text-destructive" />
                     </button>
@@ -185,19 +224,20 @@ export default function Motoristas() {
                   </div>
                 </div>
 
+                {/* Stats em tempo real */}
                 <div className="mt-4 pt-4 border-t border-border grid grid-cols-3 gap-2 text-center">
                   <div>
                     <div className="flex items-center justify-center mb-1">
                       <Route className="w-3.5 h-3.5 text-primary" />
                     </div>
-                    <p className="text-xs font-bold">{mot.totalViagens}</p>
+                    <p className="text-xs font-bold">{stats.viagens}</p>
                     <p className="text-xs text-muted-foreground">Viagens</p>
                   </div>
                   <div>
                     <div className="flex items-center justify-center mb-1">
                       <Truck className="w-3.5 h-3.5 text-primary" />
                     </div>
-                    <p className="text-xs font-bold">{formatarKm(mot.kmTotal)}</p>
+                    <p className="text-xs font-bold">{formatarKm(stats.km)}</p>
                     <p className="text-xs text-muted-foreground">KM rodados</p>
                   </div>
                   <div>
@@ -205,11 +245,19 @@ export default function Motoristas() {
                       <TrendingDown className="w-3.5 h-3.5 text-primary" />
                     </div>
                     <p className="text-xs font-bold">
-                      {mot.custoMedioPorKm > 0 ? `R$ ${mot.custoMedioPorKm.toFixed(2)}` : '—'}
+                      {custoKm > 0 ? `R$ ${custoKm.toFixed(2)}` : '—'}
                     </p>
                     <p className="text-xs text-muted-foreground">Custo/KM</p>
                   </div>
                 </div>
+
+                {stats.despesas > 0 && (
+                  <div className="mt-3 flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+                    <DollarSign className="w-3.5 h-3.5 text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">Total despesas:</span>
+                    <span className="text-xs font-bold ml-auto">{formatarMoeda(stats.despesas)}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
@@ -226,6 +274,29 @@ export default function Motoristas() {
           </Button>
         </div>
       )}
+
+      {/* AlertDialog excluir motorista */}
+      <AlertDialog open={!!motoristaPraExcluir} onOpenChange={() => setMotoristaPraExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir motorista?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O motorista <strong>{motoristaPraExcluir?.nome}</strong> será removido permanentemente junto com seu acesso ao sistema.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmarExcluir}
+              disabled={excluindo}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {excluindo ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

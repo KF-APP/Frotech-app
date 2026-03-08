@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,19 +11,56 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Truck, Plus, Search, TrendingDown, Route, DollarSign, Pencil, Trash2, TrendingUp } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Truck, Plus, Search, TrendingDown, Route, DollarSign, Pencil, Trash2, TrendingUp, User } from 'lucide-react';
 import type { Caminhao } from '../../types';
 import { formatarMoeda, formatarKm } from '../../utils/formatters';
 import { useCaminhoes } from '@/hooks/useCaminhoes';
+import { useViagens } from '@/hooks/useViagens';
+import { useDespesas } from '@/hooks/useDespesas';
+import { useMotoristas } from '@/hooks/useMotoristas';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Caminhoes() {
   const { caminhoes, loading, criarCaminhao, atualizarCaminhao, excluirCaminhao } = useCaminhoes();
+  const { viagens } = useViagens();
+  const { despesas } = useDespesas();
+  const { motoristas } = useMotoristas();
   const [busca, setBusca] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editando, setEditando] = useState<Caminhao | null>(null);
+  const [caminhaoParaExcluir, setCaminhaoParaExcluir] = useState<Caminhao | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
   const [form, setForm] = useState({ placa: '', modelo: '', ano: '', capacidade: '', valorDiaria: '' });
   const [salvando, setSalvando] = useState(false);
+
+  // Stats por caminhão calculados em tempo real
+  const statsCaminhao = useMemo(() => {
+    const map: Record<string, { km: number; viagens: number; despesas: number; motorista: string | null }> = {};
+    for (const c of caminhoes) {
+      const viagensCaminhao = viagens.filter(v => v.caminhaoId === c.id && v.status === 'concluida');
+      const kmTotal = viagensCaminhao.reduce((acc, v) => acc + (v.kmTotal || 0), 0);
+      const despesasCaminhao = despesas.filter(d => d.caminhaoId === c.id);
+      const totalDespesas = despesasCaminhao.reduce((acc, d) => acc + d.valor, 0);
+      const motorista = motoristas.find(m => m.caminhaoId === c.id);
+      map[c.id] = {
+        km: kmTotal,
+        viagens: viagensCaminhao.length,
+        despesas: totalDespesas,
+        motorista: motorista?.nome || null,
+      };
+    }
+    return map;
+  }, [caminhoes, viagens, despesas, motoristas]);
 
   const filtrados = caminhoes.filter(c =>
     c.placa.toLowerCase().includes(busca.toLowerCase()) ||
@@ -68,8 +105,12 @@ export default function Caminhoes() {
     setDialogOpen(false);
   };
 
-  const excluir = async (id: string) => {
-    await excluirCaminhao(id);
+  const confirmarExcluir = async () => {
+    if (!caminhaoParaExcluir) return;
+    setExcluindo(true);
+    await excluirCaminhao(caminhaoParaExcluir.id);
+    setExcluindo(false);
+    setCaminhaoParaExcluir(null);
   };
 
   if (loading) {
@@ -113,7 +154,9 @@ export default function Caminhoes() {
       {/* Cards de caminhões */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {filtrados.map(cam => {
-          const custoKm = cam.totalKm > 0 ? cam.totalDespesas / cam.totalKm : 0;
+          const stats = statsCaminhao[cam.id] || { km: 0, viagens: 0, despesas: 0, motorista: null };
+          const custoKm = stats.km > 0 ? stats.despesas / stats.km : 0;
+
           return (
             <Card key={cam.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
@@ -136,7 +179,7 @@ export default function Caminhoes() {
                     </button>
                     <button
                       className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
-                      onClick={() => excluir(cam.id)}
+                      onClick={() => setCaminhaoParaExcluir(cam)}
                     >
                       <Trash2 className="w-3.5 h-3.5 text-destructive" />
                     </button>
@@ -155,26 +198,36 @@ export default function Caminhoes() {
                   </div>
                 </div>
 
-                <div className="mt-4 pt-4 border-t border-border grid grid-cols-3 gap-2 text-center">
+                {/* Motorista vinculado */}
+                {stats.motorista && (
+                  <div className="mt-3 flex items-center gap-2 bg-primary/5 rounded-lg px-3 py-2">
+                    <User className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs text-muted-foreground">Motorista:</span>
+                    <span className="text-xs font-semibold ml-auto">{stats.motorista}</span>
+                  </div>
+                )}
+
+                {/* Stats em tempo real */}
+                <div className="mt-3 pt-3 border-t border-border grid grid-cols-3 gap-2 text-center">
                   <div>
                     <div className="flex items-center justify-center mb-1">
                       <Route className="w-3.5 h-3.5 text-primary" />
                     </div>
-                    <p className="text-xs font-bold">{cam.totalViagens}</p>
+                    <p className="text-xs font-bold">{stats.viagens}</p>
                     <p className="text-xs text-muted-foreground">Viagens</p>
                   </div>
                   <div>
                     <div className="flex items-center justify-center mb-1">
                       <Truck className="w-3.5 h-3.5 text-primary" />
                     </div>
-                    <p className="text-xs font-bold">{formatarKm(cam.totalKm)}</p>
+                    <p className="text-xs font-bold">{formatarKm(stats.km)}</p>
                     <p className="text-xs text-muted-foreground">KM total</p>
                   </div>
                   <div>
                     <div className="flex items-center justify-center mb-1">
                       <TrendingDown className="w-3.5 h-3.5 text-primary" />
                     </div>
-                    <p className="text-xs font-bold">R$ {custoKm.toFixed(2)}</p>
+                    <p className="text-xs font-bold">{custoKm > 0 ? `R$ ${custoKm.toFixed(2)}` : '—'}</p>
                     <p className="text-xs text-muted-foreground">Custo/KM</p>
                   </div>
                 </div>
@@ -182,7 +235,7 @@ export default function Caminhoes() {
                 <div className="mt-3 flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
                   <DollarSign className="w-3.5 h-3.5 text-muted-foreground" />
                   <span className="text-xs text-muted-foreground">Despesas totais:</span>
-                  <span className="text-xs font-bold ml-auto">{formatarMoeda(cam.totalDespesas)}</span>
+                  <span className="text-xs font-bold ml-auto">{formatarMoeda(stats.despesas)}</span>
                 </div>
                 {cam.valorDiaria > 0 && (
                   <div className="mt-2 flex items-center gap-2 bg-primary/5 rounded-lg px-3 py-2">
@@ -208,7 +261,30 @@ export default function Caminhoes() {
         </div>
       )}
 
-      {/* Dialog */}
+      {/* AlertDialog excluir caminhão */}
+      <AlertDialog open={!!caminhaoParaExcluir} onOpenChange={() => setCaminhaoParaExcluir(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir caminhão?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O caminhão <strong>{caminhaoParaExcluir?.placa}</strong> ({caminhaoParaExcluir?.modelo}) será removido permanentemente.
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmarExcluir}
+              disabled={excluindo}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {excluindo ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog cadastro/edição */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -260,7 +336,7 @@ export default function Caminhoes() {
                 value={form.valorDiaria}
                 onChange={(e) => setForm(f => ({ ...f, valorDiaria: e.target.value }))}
               />
-              <p className="text-xs text-muted-foreground">Usado para calcular o lucro semanal do caminhão</p>
+              <p className="text-xs text-muted-foreground">Usado para calcular o lucro do caminhão</p>
             </div>
           </div>
           <DialogFooter>
