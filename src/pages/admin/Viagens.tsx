@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
   DialogContent,
@@ -21,7 +22,8 @@ import {
   Navigation,
   Fuel,
 } from 'lucide-react';
-import { mockViagens, mockDespesas } from '../../data/mockData';
+import { useViagens } from '@/hooks/useViagens';
+import { useDespesas } from '@/hooks/useDespesas';
 import type { Viagem } from '../../types';
 import { formatarKm, formatarTempo, formatarDataHora, labelStatusViagem, formatarMoeda } from '../../utils/formatters';
 
@@ -34,18 +36,15 @@ function MapaRota({ viagem }: { viagem: Viagem }) {
       <div className="relative h-56 flex items-center justify-center">
         {temRota ? (
           <svg viewBox="0 0 400 200" className="w-full h-full opacity-80">
-            {/* Fundo mapa simplificado */}
             <rect width="400" height="200" fill="var(--color-muted)" rx="8" />
-            {/* Grade */}
             {[50,100,150].map(y => (
               <line key={y} x1="0" y1={y} x2="400" y2={y} stroke="var(--color-border)" strokeWidth="0.5" />
             ))}
             {[100,200,300].map(x => (
               <line key={x} x1={x} y1="0" x2={x} y2="200" stroke="var(--color-border)" strokeWidth="0.5" />
             ))}
-            {/* Rota */}
             <polyline
-              points={viagem.rota.map((_p, i) => {
+              points={viagem.rota.map((_pt, i) => {
                 const x = 30 + (i / (viagem.rota.length - 1)) * 340;
                 const y = 100 + Math.sin(i * 0.8) * 30;
                 return `${x},${y}`;
@@ -56,10 +55,8 @@ function MapaRota({ viagem }: { viagem: Viagem }) {
               strokeLinecap="round"
               strokeLinejoin="round"
             />
-            {/* Ponto inicio */}
             <circle cx="30" cy="100" r="8" fill="var(--color-chart-2)" />
             <text x="30" y="128" textAnchor="middle" fontSize="9" fill="var(--color-foreground)">Início</text>
-            {/* Ponto fim */}
             <circle
               cx="370"
               cy={100 + Math.sin((viagem.rota.length - 1) * 0.8) * 30}
@@ -69,8 +66,7 @@ function MapaRota({ viagem }: { viagem: Viagem }) {
             <text x="370" y={100 + Math.sin((viagem.rota.length - 1) * 0.8) * 30 + 18} textAnchor="middle" fontSize="9" fill="var(--color-foreground)">
               {viagem.status === 'em_andamento' ? 'Atual' : 'Fim'}
             </text>
-            {/* Pontos de GPS */}
-            {viagem.rota.slice(1, -1).map((_, i) => {
+            {viagem.rota.slice(1, -1).map((_pt, i) => {
               const x = 30 + ((i + 1) / (viagem.rota.length - 1)) * 340;
               const y = 100 + Math.sin((i + 1) * 0.8) * 30;
               return (
@@ -110,21 +106,52 @@ function MapaRota({ viagem }: { viagem: Viagem }) {
   );
 }
 
+function DespesasViagem({ viagemId }: { viagemId: string }) {
+  const { despesas, loading } = useDespesas(viagemId);
+
+  if (loading) return <div className="text-sm text-muted-foreground">Carregando despesas...</div>;
+  if (despesas.length === 0) return null;
+
+  const total = despesas.reduce((acc, d) => acc + d.valor, 0);
+
+  return (
+    <div>
+      <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
+        <Fuel className="w-4 h-4" />
+        Despesas da Viagem
+      </h3>
+      <div className="space-y-2">
+        {despesas.map(d => (
+          <div key={d.id} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
+            <div>
+              <p className="text-sm font-medium">{d.descricao}</p>
+              <p className="text-xs text-muted-foreground">{d.tipoDespesa}</p>
+            </div>
+            <p className="font-bold text-sm">{formatarMoeda(d.valor)}</p>
+          </div>
+        ))}
+        <div className="flex items-center justify-between border-t border-border pt-2 mt-2">
+          <p className="text-sm font-semibold">Total</p>
+          <p className="font-bold">{formatarMoeda(total)}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Viagens() {
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<string>('todos');
   const [viagemSelecionada, setViagemSelecionada] = useState<Viagem | null>(null);
 
-  const filtradas = mockViagens.filter(v => {
+  const { viagens, loading } = useViagens();
+
+  const filtradas = viagens.filter(v => {
     const matchBusca = v.motoristaNome.toLowerCase().includes(busca.toLowerCase()) ||
       v.caminhaoPlaca.toLowerCase().includes(busca.toLowerCase());
     const matchStatus = filtroStatus === 'todos' || v.status === filtroStatus;
     return matchBusca && matchStatus;
   });
-
-  const despesasDaViagem = viagemSelecionada
-    ? mockDespesas.filter(d => d.viagemId === viagemSelecionada.id)
-    : [];
 
   const getStatusColor = (status: string) => {
     if (status === 'em_andamento') return 'default';
@@ -164,76 +191,87 @@ export default function Viagens() {
         </div>
       </div>
 
-      {/* Lista de viagens */}
-      <div className="space-y-3">
-        {filtradas.map(viagem => (
-          <Card key={viagem.id} className="hover:shadow-md transition-shadow">
-            <CardContent className="pt-4">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-start gap-3">
-                  <div className="bg-primary/10 rounded-xl p-2.5 shrink-0">
-                    <Route className="w-4 h-4 text-primary" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-semibold text-sm">{viagem.motoristaNome}</span>
-                      <Badge variant={getStatusColor(viagem.status) as 'default' | 'secondary' | 'destructive' | 'outline'} className="text-xs">
-                        {labelStatusViagem(viagem.status)}
-                      </Badge>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1">
-                        <Truck className="w-3 h-3" />
-                        {viagem.caminhaoPlaca}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        {formatarDataHora(viagem.dataInicio)}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-4 mt-2 text-xs flex-wrap">
-                      {viagem.origem && (
-                        <span className="flex items-center gap-1 text-muted-foreground">
-                          <MapPin className="w-3 h-3" />
-                          {viagem.origem}
-                          {viagem.destino && <> → {viagem.destino}</>}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 shrink-0">
-                  {viagem.kmTotal && (
-                    <div className="text-right hidden sm:block">
-                      <p className="text-sm font-bold">{formatarKm(viagem.kmTotal)}</p>
-                      <p className="text-xs text-muted-foreground">percorridos</p>
-                    </div>
-                  )}
-                  {viagem.tempoTotal && (
-                    <div className="text-right hidden sm:block">
-                      <p className="text-sm font-bold">{formatarTempo(viagem.tempoTotal)}</p>
-                      <p className="text-xs text-muted-foreground">duração</p>
-                    </div>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViagemSelecionada(viagem)}
-                  >
-                    <Eye className="w-3.5 h-3.5 mr-1.5" />
-                    Detalhes
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Loading skeleton */}
+      {loading && (
+        <div className="space-y-3">
+          {[1,2,3].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
+        </div>
+      )}
 
-      {filtradas.length === 0 && (
+      {/* Lista de viagens */}
+      {!loading && (
+        <div className="space-y-3">
+          {filtradas.map(viagem => (
+            <Card key={viagem.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="pt-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <div className="bg-primary/10 rounded-xl p-2.5 shrink-0">
+                      <Route className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-sm">{viagem.motoristaNome}</span>
+                        <Badge variant={getStatusColor(viagem.status) as 'default' | 'secondary' | 'destructive' | 'outline'} className="text-xs">
+                          {labelStatusViagem(viagem.status)}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+                        <span className="flex items-center gap-1">
+                          <Truck className="w-3 h-3" />
+                          {viagem.caminhaoPlaca}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Calendar className="w-3 h-3" />
+                          {formatarDataHora(viagem.dataInicio)}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 mt-2 text-xs flex-wrap">
+                        {viagem.origem && (
+                          <span className="flex items-center gap-1 text-muted-foreground">
+                            <MapPin className="w-3 h-3" />
+                            {viagem.origem}
+                            {viagem.destino && <> → {viagem.destino}</>}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-4 shrink-0">
+                    {viagem.kmTotal && (
+                      <div className="text-right hidden sm:block">
+                        <p className="text-sm font-bold">{formatarKm(viagem.kmTotal)}</p>
+                        <p className="text-xs text-muted-foreground">percorridos</p>
+                      </div>
+                    )}
+                    {viagem.tempoTotal && (
+                      <div className="text-right hidden sm:block">
+                        <p className="text-sm font-bold">{formatarTempo(viagem.tempoTotal)}</p>
+                        <p className="text-xs text-muted-foreground">duração</p>
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setViagemSelecionada(viagem)}
+                    >
+                      <Eye className="w-3.5 h-3.5 mr-1.5" />
+                      Detalhes
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {!loading && filtradas.length === 0 && (
         <div className="text-center py-12">
           <Route className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">Nenhuma viagem encontrada</p>
+          <p className="text-muted-foreground">
+            {viagens.length === 0 ? 'Nenhuma viagem registrada ainda' : 'Nenhuma viagem encontrada para os filtros selecionados'}
+          </p>
         </div>
       )}
 
@@ -295,30 +333,8 @@ export default function Viagens() {
               {/* Mapa da rota */}
               <MapaRota viagem={viagemSelecionada} />
 
-              {/* Despesas da viagem */}
-              {despesasDaViagem.length > 0 && (
-                <div>
-                  <h3 className="font-semibold text-sm mb-3 flex items-center gap-2">
-                    <Fuel className="w-4 h-4" />
-                    Despesas da Viagem
-                  </h3>
-                  <div className="space-y-2">
-                    {despesasDaViagem.map(d => (
-                      <div key={d.id} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
-                        <div>
-                          <p className="text-sm font-medium">{d.descricao}</p>
-                          <p className="text-xs text-muted-foreground">{d.tipoDespesa}</p>
-                        </div>
-                        <p className="font-bold text-sm">{formatarMoeda(d.valor)}</p>
-                      </div>
-                    ))}
-                    <div className="flex items-center justify-between border-t border-border pt-2 mt-2">
-                      <p className="text-sm font-semibold">Total</p>
-                      <p className="font-bold">{formatarMoeda(despesasDaViagem.reduce((acc, d) => acc + d.valor, 0))}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Despesas da viagem carregadas do banco */}
+              <DespesasViagem viagemId={viagemSelecionada.id} />
             </div>
           )}
         </DialogContent>
