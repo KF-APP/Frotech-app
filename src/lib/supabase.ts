@@ -22,7 +22,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     storageKey: 'frotatech-auth',
-    lock: async (name, acquireTimeout, fn) => {
+    lock: async (name, _acquireTimeout, fn) => {
       if (typeof navigator !== 'undefined' && navigator.locks) {
         return navigator.locks.request(name, { ifAvailable: false }, fn);
       }
