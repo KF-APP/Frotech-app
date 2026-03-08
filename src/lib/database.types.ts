@@ -134,6 +134,7 @@ export interface Database {
           destino: string | null;
           admin_id: string | null;
           criado_em: string;
+          valor_frete: number | null;
         };
         Insert: {
           id?: string;
@@ -150,6 +151,7 @@ export interface Database {
           destino?: string | null;
           admin_id?: string | null;
           criado_em?: string;
+          valor_frete?: number | null;
         };
         Update: {
           id?: string;
@@ -166,6 +168,109 @@ export interface Database {
           destino?: string | null;
           admin_id?: string | null;
           criado_em?: string;
+          valor_frete?: number | null;
+        };
+        Relationships: [];
+      };
+      config_pagamentos: {
+        Row: {
+          id: string;
+          admin_id: string;
+          porcentagem_motorista: number;
+          porcentagem_administrador: number;
+          criado_em: string;
+          atualizado_em: string;
+        };
+        Insert: {
+          id?: string;
+          admin_id: string;
+          porcentagem_motorista: number;
+          porcentagem_administrador: number;
+          criado_em?: string;
+          atualizado_em?: string;
+        };
+        Update: {
+          id?: string;
+          admin_id?: string;
+          porcentagem_motorista?: number;
+          porcentagem_administrador?: number;
+          criado_em?: string;
+          atualizado_em?: string;
+        };
+        Relationships: [];
+      };
+      ciclos_pagamento: {
+        Row: {
+          id: string;
+          admin_id: string;
+          motorista_id: string;
+          motorista_nome: string;
+          caminhao_id: string | null;
+          caminhao_placa: string | null;
+          semana_inicio: string;
+          semana_fim: string;
+          data_pagamento: string;
+          total_viagens: number;
+          total_faturado: number;
+          total_despesas: number;
+          lucro_total: number;
+          porcentagem_motorista: number;
+          porcentagem_administrador: number;
+          valor_motorista: number;
+          valor_administrador: number;
+          status: 'pendente' | 'pago';
+          data_confirmacao_pagamento: string | null;
+          observacoes: string | null;
+          criado_em: string;
+          atualizado_em: string;
+        };
+        Insert: {
+          id?: string;
+          admin_id: string;
+          motorista_id: string;
+          motorista_nome: string;
+          caminhao_id?: string | null;
+          caminhao_placa?: string | null;
+          semana_inicio: string;
+          semana_fim: string;
+          data_pagamento: string;
+          total_viagens: number;
+          total_faturado: number;
+          total_despesas: number;
+          lucro_total: number;
+          porcentagem_motorista: number;
+          porcentagem_administrador: number;
+          valor_motorista: number;
+          valor_administrador: number;
+          status?: 'pendente' | 'pago';
+          data_confirmacao_pagamento?: string | null;
+          observacoes?: string | null;
+          criado_em?: string;
+          atualizado_em?: string;
+        };
+        Update: {
+          id?: string;
+          admin_id?: string;
+          motorista_id?: string;
+          motorista_nome?: string;
+          caminhao_id?: string | null;
+          caminhao_placa?: string | null;
+          semana_inicio?: string;
+          semana_fim?: string;
+          data_pagamento?: string;
+          total_viagens?: number;
+          total_faturado?: number;
+          total_despesas?: number;
+          lucro_total?: number;
+          porcentagem_motorista?: number;
+          porcentagem_administrador?: number;
+          valor_motorista?: number;
+          valor_administrador?: number;
+          status?: 'pendente' | 'pago';
+          data_confirmacao_pagamento?: string | null;
+          observacoes?: string | null;
+          criado_em?: string;
+          atualizado_em?: string;
         };
         Relationships: [];
       };
