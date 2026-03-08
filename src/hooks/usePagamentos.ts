@@ -276,7 +276,7 @@ export function usePagamentos() {
         .eq('semana_inicio', grupo.semanaInicio)
         .single();
 
-      if (existente && (existente as Record<string, unknown>).status === 'pago') {
+      if (existente && (existente as { id: string; status: string }).status === 'pago') {
         // Não reprocessa ciclos já pagos
         continue;
       }
@@ -298,18 +298,19 @@ export function usePagamentos() {
         porcentagem_administrador: porcentagemAdministrador,
         valor_motorista: valorMotorista,
         valor_administrador: valorAdministrador,
-        status: 'pendente',
+        status: 'pendente' as const,
         atualizado_em: new Date().toISOString(),
       };
 
       if (existente) {
+        const existenteId = (existente as { id: string; status: string }).id;
         await supabase
           .from('ciclos_pagamento')
           .update(dadosCiclo)
-          .eq('id', (existente as Record<string, unknown>).id);
+          .eq('id', existenteId);
         ciclosAtualizados++;
       } else {
-        await supabase.from('ciclos_pagamento').insert(dadosCiclo);
+        await supabase.from('ciclos_pagamento').insert([dadosCiclo]);
         ciclosCriados++;
       }
     }
