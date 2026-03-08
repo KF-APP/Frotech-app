@@ -10,6 +10,7 @@ import Viagens from './pages/admin/Viagens';
 import Despesas from './pages/admin/Despesas';
 import Relatorios from './pages/admin/Relatorios';
 import Admins from './pages/admin/Admins';
+import CadastroAdmin from './pages/CadastroAdmin';
 import AppMotorista from './pages/motorista/AppMotorista';
 
 function PrivateRoute({ children, tipo }: { children: React.ReactNode; tipo?: 'admin' | 'motorista' }) {
@@ -40,6 +41,7 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/cadastro-admin" element={<CadastroAdmin />} />
       <Route path="/" element={<HomeRedirect />} />
 
       {/* Admin */}
