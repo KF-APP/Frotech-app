@@ -273,7 +273,7 @@ export default function AppMotorista() {
     setDialogEncerrar(false);
     setSalvandoViagem(false);
 
-    toast.success(`Viagem salva! ${kmFinal.toFixed(1)} km percorridos em ${formatarTempo(tempoDecorrido)}`);
+    toast.success(`Viagem salva! ${kmFinal.toFixed(2)} km percorridos em ${formatarTempo(tempoDecorrido)}`);
     setTela('home');
   };
 
@@ -434,7 +434,7 @@ export default function AppMotorista() {
                   <Card>
                     <CardContent className="pt-4 text-center">
                       <Route className="w-5 h-5 text-primary mx-auto mb-1" />
-                      <p className="text-lg font-bold">{kmPercorrido.toFixed(1)} km</p>
+                      <p className="text-lg font-bold">{kmPercorrido.toFixed(2)} km</p>
                       <p className="text-xs text-muted-foreground">Percorridos</p>
                     </CardContent>
                   </Card>
@@ -491,7 +491,7 @@ export default function AppMotorista() {
               <Card>
                 <CardContent className="pt-3 pb-3 text-center">
                   <Route className="w-4 h-4 text-primary mx-auto mb-1" />
-                  <p className="text-sm font-bold">{kmPercorrido.toFixed(1)}</p>
+                  <p className="text-sm font-bold">{kmPercorrido.toFixed(2)}</p>
                   <p className="text-xs text-muted-foreground">KM</p>
                 </CardContent>
               </Card>
@@ -711,7 +711,7 @@ export default function AppMotorista() {
             <div className="bg-muted/50 rounded-lg p-4 space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Distância</span>
-                <span className="font-bold">{kmPercorrido.toFixed(1)} km</span>
+                <span className="font-bold">{kmPercorrido.toFixed(2)} km</span>
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">Tempo</span>
