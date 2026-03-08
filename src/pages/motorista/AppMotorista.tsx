@@ -101,14 +101,19 @@ export default function AppMotorista() {
   const [comprovantePreview, setComprovantePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get motorista data to find caminhao
-  const [motoristaData, setMotoristaData] = useState<{ nome: string; caminhao_id: string | null; caminhao_placa: string | null } | null>(null);
+  // Get motorista data to find caminhao and admin_id
+  const [motoristaData, setMotoristaData] = useState<{
+    nome: string;
+    caminhao_id: string | null;
+    caminhao_placa: string | null;
+    admin_id: string | null;
+  } | null>(null);
 
   useEffect(() => {
     if (motoristaId) {
       supabase
         .from('motoristas')
-        .select('nome, caminhao_id')
+        .select('nome, caminhao_id, admin_id')
         .eq('id', motoristaId)
         .single()
         .then(async ({ data }) => {
@@ -126,6 +131,7 @@ export default function AppMotorista() {
               nome: data.nome,
               caminhao_id: data.caminhao_id,
               caminhao_placa: placa,
+              admin_id: (data as Record<string, unknown>).admin_id as string | null,
             });
           }
         });
@@ -213,6 +219,7 @@ export default function AppMotorista() {
       motoristaNome: user.nome,
       caminhaoId: motoristaData.caminhao_id,
       caminhaoPlaca: motoristaData.caminhao_placa || '',
+      adminId: motoristaData.admin_id || undefined,
     });
 
     if (result.success && result.viagemId) {
@@ -256,6 +263,7 @@ export default function AppMotorista() {
         viagemId: viagemAtivaId,
         criadoPor: 'motorista',
         comprovanteFile: d.comprovanteFile || null,
+        adminId: motoristaData?.admin_id || undefined,
       });
     }
 
