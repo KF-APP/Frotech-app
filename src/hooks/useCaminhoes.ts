@@ -15,6 +15,7 @@ function dbToCaminhao(row: Record<string, unknown>): Caminhao {
     totalKm: Number(row.total_km) || 0,
     totalDespesas: Number(row.total_despesas) || 0,
     totalViagens: Number(row.total_viagens) || 0,
+    valorDiaria: Number(row.valor_diaria) || 0,
   };
 }
 
@@ -52,6 +53,7 @@ export function useCaminhoes() {
       ano: dados.ano,
       capacidade: dados.capacidade,
       admin_id: user.id,
+      valor_diaria: dados.valorDiaria || 0,
     });
 
     if (error) {
@@ -76,6 +78,7 @@ export function useCaminhoes() {
         modelo: dados.modelo,
         ano: dados.ano,
         capacidade: dados.capacidade,
+        valor_diaria: dados.valorDiaria,
       })
       .eq('id', id);
 

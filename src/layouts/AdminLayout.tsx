@@ -16,12 +16,14 @@ import {
   ChevronRight,
   Bell,
   UserCog,
+  Activity,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const navItems = [
   { to: '/admin', label: 'Dashboard', icon: LayoutDashboard, end: true },
+  { to: '/admin/monitoramento', label: 'Monitoramento', icon: Activity },
   { to: '/admin/caminhoes', label: 'Caminhões', icon: Truck },
   { to: '/admin/motoristas', label: 'Motoristas', icon: Users },
   { to: '/admin/viagens', label: 'Viagens', icon: Route },

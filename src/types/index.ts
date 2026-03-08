@@ -18,6 +18,7 @@ export interface Caminhao {
   totalKm: number;
   totalDespesas: number;
   totalViagens: number;
+  valorDiaria: number;
 }
 
 export interface Motorista {

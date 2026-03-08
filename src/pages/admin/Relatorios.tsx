@@ -16,7 +16,7 @@ import {
   LineChart,
   Line,
 } from 'recharts';
-import { BarChart3, Download, FileText, TrendingDown, Route, DollarSign, Truck, Users } from 'lucide-react';
+import { BarChart3, Download, FileText, TrendingDown, Route, DollarSign, Truck, Users, TrendingUp } from 'lucide-react';
 import { useViagens } from '@/hooks/useViagens';
 import { useDespesas } from '@/hooks/useDespesas';
 import { useMotoristas } from '@/hooks/useMotoristas';
@@ -123,8 +123,44 @@ export default function Relatorios() {
     [despesasPorTipo]
   );
 
+  // Lucro semanal por caminhão (valor_diaria * viagens_semana - despesas_semana)
+  const lucroPorCaminhaoSemana = useMemo(() => {
+    const hoje = new Date();
+    const inicioDaSemana = new Date(hoje);
+    inicioDaSemana.setDate(hoje.getDate() - hoje.getDay());
+    inicioDaSemana.setHours(0, 0, 0, 0);
+
+    return caminhoes
+      .filter(c => c.valorDiaria > 0)
+      .map(c => {
+        const viagensSemana = viagens.filter(v =>
+          v.caminhaoId === c.id &&
+          v.status === 'concluida' &&
+          new Date(v.dataInicio) >= inicioDaSemana
+        );
+        const despesasSemana = despesas
+          .filter(d => d.caminhaoId === c.id && new Date(d.data) >= inicioDaSemana)
+          .reduce((acc, d) => acc + d.valor, 0);
+        const receitaSemana = viagensSemana.length * c.valorDiaria;
+        const lucro = receitaSemana - despesasSemana;
+        return {
+          placa: c.placa,
+          modelo: c.modelo,
+          viagens: viagensSemana.length,
+          receita: receitaSemana,
+          despesas: despesasSemana,
+          lucro,
+          valorDiaria: c.valorDiaria,
+        };
+      })
+      .sort((a, b) => b.lucro - a.lucro);
+  }, [caminhoes, viagens, despesas]);
+
+  const totalReceitaSemana = useMemo(() => lucroPorCaminhaoSemana.reduce((a, c) => a + c.receita, 0), [lucroPorCaminhaoSemana]);
+  const totalLucroSemana = useMemo(() => lucroPorCaminhaoSemana.reduce((a, c) => a + c.lucro, 0), [lucroPorCaminhaoSemana]);
+
   const exportarPDF = () => toast.info('Exportação para PDF disponível na versão completa com backend');
-  const exportarExcel = () => toast.info('Exporta��ão para Excel disponível na versão completa com backend');
+  const exportarExcel = () => toast.info('Exportação para Excel disponível na versão completa com backend');
 
   if (loading) {
     return (
@@ -354,6 +390,78 @@ export default function Relatorios() {
           )}
         </CardContent>
       </Card>
+
+      {/* Lucro Semanal por Caminhão */}
+      {lucroPorCaminhaoSemana.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-primary" />
+              Lucro Semanal por Caminhão
+            </CardTitle>
+            <CardDescription>
+              Baseado no valor da diária configurado • Semana atual
+              {totalReceitaSemana > 0 && (
+                <span className="ml-2 font-medium text-foreground">
+                  Receita: {formatarMoeda(totalReceitaSemana)} • Lucro: <span className={totalLucroSemana >= 0 ? 'text-green-600' : 'text-destructive'}>{formatarMoeda(totalLucroSemana)}</span>
+                </span>
+              )}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {lucroPorCaminhaoSemana.map(c => (
+                <div key={c.placa} className="rounded-xl border border-border p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="font-semibold text-sm">{c.modelo}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{c.placa}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={`font-bold text-lg ${c.lucro >= 0 ? 'text-green-600' : 'text-destructive'}`}>
+                        {c.lucro >= 0 ? '+' : ''}{formatarMoeda(c.lucro)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">lucro da semana</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                    <div className="bg-muted/50 rounded-lg p-2">
+                      <p className="text-xs text-muted-foreground">Viagens</p>
+                      <p className="font-bold">{c.viagens}</p>
+                      <p className="text-xs text-muted-foreground">{formatarMoeda(c.valorDiaria)}/dia</p>
+                    </div>
+                    <div className="bg-primary/5 rounded-lg p-2">
+                      <p className="text-xs text-muted-foreground">Receita</p>
+                      <p className="font-bold text-primary">{formatarMoeda(c.receita)}</p>
+                      <p className="text-xs text-muted-foreground">bruta</p>
+                    </div>
+                    <div className="bg-destructive/5 rounded-lg p-2">
+                      <p className="text-xs text-muted-foreground">Despesas</p>
+                      <p className="font-bold text-destructive">{formatarMoeda(c.despesas)}</p>
+                      <p className="text-xs text-muted-foreground">na semana</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {lucroPorCaminhaoSemana.every(c => c.viagens === 0) && (
+                <p className="text-sm text-muted-foreground text-center py-2">
+                  Nenhuma viagem concluída esta semana. Configure o valor da diária nos caminhões e registre viagens.
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {lucroPorCaminhaoSemana.length === 0 && (
+        <Card>
+          <CardContent className="pt-6 pb-6 text-center">
+            <TrendingUp className="w-10 h-10 mx-auto mb-2 text-muted-foreground/40" />
+            <p className="text-sm font-medium">Configure o valor da diária nos caminhões</p>
+            <p className="text-xs text-muted-foreground mt-1">Acesse Caminhões → edite um caminhão e defina o valor da diária para ver o lucro semanal aqui.</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabela resumo despesas */}
       {despesasPorCategoria.length > 0 && (

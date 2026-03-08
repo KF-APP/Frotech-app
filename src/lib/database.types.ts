@@ -46,6 +46,7 @@ export interface Database {
           total_despesas: number;
           total_viagens: number;
           criado_em: string;
+          valor_diaria: number;
         };
         Insert: {
           id?: string;
@@ -58,6 +59,7 @@ export interface Database {
           total_despesas?: number;
           total_viagens?: number;
           criado_em?: string;
+          valor_diaria?: number;
         };
         Update: {
           id?: string;
@@ -70,6 +72,7 @@ export interface Database {
           total_despesas?: number;
           total_viagens?: number;
           criado_em?: string;
+          valor_diaria?: number;
         };
         Relationships: [];
       };

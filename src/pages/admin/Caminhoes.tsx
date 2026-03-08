@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { Truck, Plus, Search, TrendingDown, Route, DollarSign, Pencil, Trash2 } from 'lucide-react';
+import { Truck, Plus, Search, TrendingDown, Route, DollarSign, Pencil, Trash2, TrendingUp } from 'lucide-react';
 import type { Caminhao } from '../../types';
 import { formatarMoeda, formatarKm } from '../../utils/formatters';
 import { useCaminhoes } from '@/hooks/useCaminhoes';
@@ -22,7 +22,7 @@ export default function Caminhoes() {
   const [busca, setBusca] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editando, setEditando] = useState<Caminhao | null>(null);
-  const [form, setForm] = useState({ placa: '', modelo: '', ano: '', capacidade: '' });
+  const [form, setForm] = useState({ placa: '', modelo: '', ano: '', capacidade: '', valorDiaria: '' });
   const [salvando, setSalvando] = useState(false);
 
   const filtrados = caminhoes.filter(c =>
@@ -32,13 +32,13 @@ export default function Caminhoes() {
 
   const abrirNovo = () => {
     setEditando(null);
-    setForm({ placa: '', modelo: '', ano: new Date().getFullYear().toString(), capacidade: '' });
+    setForm({ placa: '', modelo: '', ano: new Date().getFullYear().toString(), capacidade: '', valorDiaria: '' });
     setDialogOpen(true);
   };
 
   const abrirEditar = (cam: Caminhao) => {
     setEditando(cam);
-    setForm({ placa: cam.placa, modelo: cam.modelo, ano: cam.ano.toString(), capacidade: cam.capacidade.toString() });
+    setForm({ placa: cam.placa, modelo: cam.modelo, ano: cam.ano.toString(), capacidade: cam.capacidade.toString(), valorDiaria: cam.valorDiaria > 0 ? cam.valorDiaria.toString() : '' });
     setDialogOpen(true);
   };
 
@@ -52,6 +52,7 @@ export default function Caminhoes() {
         modelo: form.modelo,
         ano: Number(form.ano),
         capacidade: Number(form.capacidade),
+        valorDiaria: Number(form.valorDiaria) || 0,
       });
     } else {
       await criarCaminhao({
@@ -59,6 +60,7 @@ export default function Caminhoes() {
         modelo: form.modelo,
         ano: Number(form.ano),
         capacidade: Number(form.capacidade),
+        valorDiaria: Number(form.valorDiaria) || 0,
       });
     }
 
@@ -182,6 +184,13 @@ export default function Caminhoes() {
                   <span className="text-xs text-muted-foreground">Despesas totais:</span>
                   <span className="text-xs font-bold ml-auto">{formatarMoeda(cam.totalDespesas)}</span>
                 </div>
+                {cam.valorDiaria > 0 && (
+                  <div className="mt-2 flex items-center gap-2 bg-primary/5 rounded-lg px-3 py-2">
+                    <TrendingUp className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs text-muted-foreground">Valor diária:</span>
+                    <span className="text-xs font-bold ml-auto text-primary">{formatarMoeda(cam.valorDiaria)}</span>
+                  </div>
+                )}
               </CardContent>
             </Card>
           );
@@ -241,6 +250,17 @@ export default function Caminhoes() {
                   onChange={(e) => setForm(f => ({ ...f, capacidade: e.target.value }))}
                 />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Valor da diária (R$)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                placeholder="Ex: 350,00"
+                value={form.valorDiaria}
+                onChange={(e) => setForm(f => ({ ...f, valorDiaria: e.target.value }))}
+              />
+              <p className="text-xs text-muted-foreground">Usado para calcular o lucro semanal do caminhão</p>
             </div>
           </div>
           <DialogFooter>
