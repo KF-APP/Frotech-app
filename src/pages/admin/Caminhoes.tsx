@@ -1,0 +1,248 @@
+import { useState } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { Truck, Plus, Search, TrendingDown, Route, DollarSign, Pencil, Trash2 } from 'lucide-react';
+import { mockCaminhoes as initialCaminhoes } from '../../data/mockData';
+import type { Caminhao } from '../../types';
+import { formatarMoeda, formatarKm } from '../../utils/formatters';
+import { toast } from 'sonner';
+
+export default function Caminhoes() {
+  const [caminhoes, setCaminhoes] = useState<Caminhao[]>(initialCaminhoes);
+  const [busca, setBusca] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editando, setEditando] = useState<Caminhao | null>(null);
+  const [form, setForm] = useState({ placa: '', modelo: '', ano: '', capacidade: '' });
+
+  const filtrados = caminhoes.filter(c =>
+    c.placa.toLowerCase().includes(busca.toLowerCase()) ||
+    c.modelo.toLowerCase().includes(busca.toLowerCase())
+  );
+
+  const abrirNovo = () => {
+    setEditando(null);
+    setForm({ placa: '', modelo: '', ano: new Date().getFullYear().toString(), capacidade: '' });
+    setDialogOpen(true);
+  };
+
+  const abrirEditar = (cam: Caminhao) => {
+    setEditando(cam);
+    setForm({ placa: cam.placa, modelo: cam.modelo, ano: cam.ano.toString(), capacidade: cam.capacidade.toString() });
+    setDialogOpen(true);
+  };
+
+  const salvar = () => {
+    if (!form.placa || !form.modelo || !form.ano || !form.capacidade) {
+      toast.error('Preencha todos os campos obrigatórios');
+      return;
+    }
+
+    if (editando) {
+      setCaminhoes(prev => prev.map(c => c.id === editando.id
+        ? { ...c, placa: form.placa, modelo: form.modelo, ano: Number(form.ano), capacidade: Number(form.capacidade) }
+        : c
+      ));
+      toast.success('Caminhão atualizado com sucesso!');
+    } else {
+      const novo: Caminhao = {
+        id: `cam-${Date.now()}`,
+        placa: form.placa,
+        modelo: form.modelo,
+        ano: Number(form.ano),
+        capacidade: Number(form.capacidade),
+        adminId: 'admin-1',
+        totalKm: 0,
+        totalDespesas: 0,
+        totalViagens: 0,
+      };
+      setCaminhoes(prev => [...prev, novo]);
+      toast.success('Caminhão cadastrado com sucesso!');
+    }
+    setDialogOpen(false);
+  };
+
+  const excluir = (id: string) => {
+    setCaminhoes(prev => prev.filter(c => c.id !== id));
+    toast.success('Caminhão removido');
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Caminhões</h1>
+          <p className="text-muted-foreground text-sm mt-1">Gerencie a frota de veículos</p>
+        </div>
+        <Button onClick={abrirNovo}>
+          <Plus className="w-4 h-4 mr-2" />
+          Novo Caminhão
+        </Button>
+      </div>
+
+      {/* Busca */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+        <Input
+          placeholder="Buscar por placa ou modelo..."
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
+      {/* Cards de caminhões */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {filtrados.map(cam => {
+          const custoKm = cam.totalKm > 0 ? cam.totalDespesas / cam.totalKm : 0;
+          return (
+            <Card key={cam.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-primary/10 rounded-xl p-3">
+                      <Truck className="w-5 h-5 text-primary" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-base">{cam.modelo}</CardTitle>
+                      <Badge variant="outline" className="mt-1 text-xs font-mono">{cam.placa}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      className="p-1.5 rounded-lg hover:bg-accent transition-colors"
+                      onClick={() => abrirEditar(cam)}
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-muted-foreground" />
+                    </button>
+                    <button
+                      className="p-1.5 rounded-lg hover:bg-destructive/10 transition-colors"
+                      onClick={() => excluir(cam.id)}
+                    >
+                      <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                    </button>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <p className="text-muted-foreground text-xs">Ano</p>
+                    <p className="font-medium">{cam.ano}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Capacidade</p>
+                    <p className="font-medium">{(cam.capacidade / 1000).toFixed(0)}t</p>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-border grid grid-cols-3 gap-2 text-center">
+                  <div>
+                    <div className="flex items-center justify-center mb-1">
+                      <Route className="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <p className="text-xs font-bold">{cam.totalViagens}</p>
+                    <p className="text-xs text-muted-foreground">Viagens</p>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-center mb-1">
+                      <Truck className="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <p className="text-xs font-bold">{formatarKm(cam.totalKm)}</p>
+                    <p className="text-xs text-muted-foreground">KM total</p>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-center mb-1">
+                      <TrendingDown className="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <p className="text-xs font-bold">R$ {custoKm.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground">Custo/KM</p>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center gap-2 bg-muted/50 rounded-lg px-3 py-2">
+                  <DollarSign className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-xs text-muted-foreground">Despesas totais:</span>
+                  <span className="text-xs font-bold ml-auto">{formatarMoeda(cam.totalDespesas)}</span>
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      {filtrados.length === 0 && (
+        <div className="text-center py-12">
+          <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground">Nenhum caminhão encontrado</p>
+          <Button className="mt-4" onClick={abrirNovo}>
+            <Plus className="w-4 h-4 mr-2" />
+            Cadastrar primeiro caminhão
+          </Button>
+        </div>
+      )}
+
+      {/* Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editando ? 'Editar Caminhão' : 'Novo Caminhão'}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Placa *</Label>
+              <Input
+                placeholder="ABC-1234"
+                value={form.placa}
+                onChange={(e) => setForm(f => ({ ...f, placa: e.target.value.toUpperCase() }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Modelo *</Label>
+              <Input
+                placeholder="Ex: Volvo FH 460"
+                value={form.modelo}
+                onChange={(e) => setForm(f => ({ ...f, modelo: e.target.value }))}
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Ano *</Label>
+                <Input
+                  type="number"
+                  placeholder="2024"
+                  value={form.ano}
+                  onChange={(e) => setForm(f => ({ ...f, ano: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Capacidade (kg) *</Label>
+                <Input
+                  type="number"
+                  placeholder="25000"
+                  value={form.capacidade}
+                  onChange={(e) => setForm(f => ({ ...f, capacidade: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
+            <Button onClick={salvar}>
+              {editando ? 'Salvar alterações' : 'Cadastrar'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

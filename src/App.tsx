@@ -1,17 +1,83 @@
-// Nota: O BrowserRouter está definido no main.tsx, então você pode usar Routes e Route diretamente aqui
-import { ThemeToggle } from "@/components/theme-toggle";
+import { Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { Toaster } from 'sonner';
+import Login from './pages/Login';
+import AdminLayout from './layouts/AdminLayout';
+import Dashboard from './pages/admin/Dashboard';
+import Caminhoes from './pages/admin/Caminhoes';
+import Motoristas from './pages/admin/Motoristas';
+import Viagens from './pages/admin/Viagens';
+import Despesas from './pages/admin/Despesas';
+import Relatorios from './pages/admin/Relatorios';
+import AppMotorista from './pages/motorista/AppMotorista';
 
-export function App() {
+function PrivateRoute({ children, tipo }: { children: React.ReactNode; tipo?: 'admin' | 'motorista' }) {
+  const { isAuthenticated, user } = useAuth();
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (tipo && user?.tipo !== tipo) {
+    if (user?.tipo === 'admin') return <Navigate to="/admin" replace />;
+    if (user?.tipo === 'motorista') return <Navigate to="/motorista" replace />;
+  }
+
+  return <>{children}</>;
+}
+
+function HomeRedirect() {
+  const { isAuthenticated, user } = useAuth();
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  if (user?.tipo === 'admin') return <Navigate to="/admin" replace />;
+  if (user?.tipo === 'motorista') return <Navigate to="/motorista" replace />;
+  return <Navigate to="/login" replace />;
+}
+
+function AppRoutes() {
   return (
-    <div className="relative min-h-screen">
-      <div className="absolute top-4 right-4 z-50">
-        <ThemeToggle />
-      </div>
-      <div className="flex items-center justify-center min-h-screen">
-        <h1 className="text-4xl font-bold">lasy</h1>
-      </div>
-    </div>
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route path="/" element={<HomeRedirect />} />
+
+      {/* Admin */}
+      <Route
+        path="/admin"
+        element={
+          <PrivateRoute tipo="admin">
+            <AdminLayout />
+          </PrivateRoute>
+        }
+      >
+        <Route index element={<Dashboard />} />
+        <Route path="caminhoes" element={<Caminhoes />} />
+        <Route path="motoristas" element={<Motoristas />} />
+        <Route path="viagens" element={<Viagens />} />
+        <Route path="despesas" element={<Despesas />} />
+        <Route path="relatorios" element={<Relatorios />} />
+      </Route>
+
+      {/* Motorista */}
+      <Route
+        path="/motorista"
+        element={
+          <PrivateRoute tipo="motorista">
+            <AppMotorista />
+          </PrivateRoute>
+        }
+      />
+
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 
-export default App;
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppRoutes />
+      <Toaster position="top-right" richColors />
+    </AuthProvider>
+  );
+}
