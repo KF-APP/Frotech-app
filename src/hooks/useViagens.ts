@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { Viagem } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 function dbToViagem(row: Record<string, unknown>): Viagem {
   return {
@@ -22,6 +23,7 @@ function dbToViagem(row: Record<string, unknown>): Viagem {
 }
 
 export function useViagens(motoristaId?: string) {
+  const { user } = useAuth();
   const [viagens, setViagens] = useState<Viagem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -56,6 +58,7 @@ export function useViagens(motoristaId?: string) {
     caminhaoId: string;
     caminhaoPlaca: string;
     origem?: string;
+    adminId?: string;
   }) => {
     const { data, error } = await supabase
       .from('viagens')
@@ -66,6 +69,7 @@ export function useViagens(motoristaId?: string) {
         caminhao_placa: dados.caminhaoPlaca,
         origem: dados.origem || null,
         status: 'em_andamento',
+        admin_id: dados.adminId || user?.id || null,
       })
       .select()
       .single();

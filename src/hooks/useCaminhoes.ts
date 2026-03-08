@@ -25,6 +25,7 @@ export function useCaminhoes() {
 
   const fetchCaminhoes = useCallback(async () => {
     setLoading(true);
+    // RLS já filtra por admin_id automaticamente
     const { data, error } = await supabase
       .from('caminhoes')
       .select('*')

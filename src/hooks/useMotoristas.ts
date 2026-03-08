@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { Motorista } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
 
 function dbToMotorista(row: Record<string, unknown>): Motorista {
   return {
@@ -18,11 +19,13 @@ function dbToMotorista(row: Record<string, unknown>): Motorista {
 }
 
 export function useMotoristas() {
+  const { user } = useAuth();
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchMotoristas = useCallback(async () => {
     setLoading(true);
+    // RLS filtra automaticamente por admin_id
     const { data, error } = await supabase
       .from('motoristas')
       .select('*')
@@ -47,7 +50,9 @@ export function useMotoristas() {
     telefone: string;
     caminhaoId?: string;
   }) => {
-    // Create auth user via admin API
+    if (!user) return { success: false };
+
+    // Cria o usuário auth
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email: dados.email,
       password: dados.senha,
@@ -67,26 +72,19 @@ export function useMotoristas() {
       return { success: false };
     }
 
-    // Create motorista record
+    // Cria o registro de motorista com admin_id do admin logado
     const { error: motError } = await supabase.from('motoristas').insert({
       user_id: authData.user.id,
       nome: dados.nome,
       email: dados.email,
       telefone: dados.telefone,
       caminhao_id: dados.caminhaoId || null,
+      admin_id: user.id,
     });
 
     if (motError) {
       toast.error('Erro ao cadastrar motorista');
       return { success: false };
-    }
-
-    // Update caminhão if linked
-    if (dados.caminhaoId) {
-      await supabase
-        .from('caminhoes')
-        .update({ total_viagens: 0 })
-        .eq('id', dados.caminhaoId);
     }
 
     toast.success('Motorista cadastrado com sucesso!');
@@ -115,7 +113,6 @@ export function useMotoristas() {
   };
 
   const excluirMotorista = async (id: string) => {
-    // Get user_id before deleting
     const { data: mot } = await supabase
       .from('motoristas')
       .select('user_id')
@@ -129,7 +126,6 @@ export function useMotoristas() {
       return { success: false };
     }
 
-    // Also delete auth user
     if (mot?.user_id) {
       await supabase.auth.admin.deleteUser(mot.user_id);
     }

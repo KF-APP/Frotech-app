@@ -6,6 +6,7 @@ interface AuthContextType extends AuthState {
   login: (email: string, senha: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   motoristaId?: string;
+  adminId?: string; // ID do admin logado (para filtrar dados multi-tenant)
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -16,10 +17,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: false,
   });
   const [motoristaId, setMotoristaId] = useState<string | undefined>();
+  const [adminId, setAdminId] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Restore session on mount
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (session?.user) {
         await loadUserProfile(session.user.id);
@@ -27,13 +28,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     });
 
-    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
         await loadUserProfile(session.user.id);
       } else if (event === 'SIGNED_OUT') {
         setAuthState({ user: null, isAuthenticated: false });
         setMotoristaId(undefined);
+        setAdminId(undefined);
       }
     });
 
@@ -69,16 +70,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .eq('user_id', userId)
         .single();
       setMotoristaId(motorista?.id);
+      setAdminId(undefined);
+    } else if (profile.tipo === 'admin') {
+      setAdminId(userId);
+      setMotoristaId(undefined);
     }
   }
 
   const login = async (email: string, senha: string): Promise<{ success: boolean; error?: string }> => {
     const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
-
     if (error) {
       return { success: false, error: 'Email ou senha incorretos' };
     }
-
     return { success: true };
   };
 
@@ -98,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, logout, motoristaId }}>
+    <AuthContext.Provider value={{ ...authState, login, logout, motoristaId, adminId }}>
       {children}
     </AuthContext.Provider>
   );

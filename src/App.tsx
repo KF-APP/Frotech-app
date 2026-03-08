@@ -9,6 +9,7 @@ import Motoristas from './pages/admin/Motoristas';
 import Viagens from './pages/admin/Viagens';
 import Despesas from './pages/admin/Despesas';
 import Relatorios from './pages/admin/Relatorios';
+import Admins from './pages/admin/Admins';
 import AppMotorista from './pages/motorista/AppMotorista';
 
 function PrivateRoute({ children, tipo }: { children: React.ReactNode; tipo?: 'admin' | 'motorista' }) {
@@ -56,6 +57,7 @@ function AppRoutes() {
         <Route path="viagens" element={<Viagens />} />
         <Route path="despesas" element={<Despesas />} />
         <Route path="relatorios" element={<Relatorios />} />
+        <Route path="admins" element={<Admins />} />
       </Route>
 
       {/* Motorista */}

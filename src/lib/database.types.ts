@@ -81,6 +81,7 @@ export interface Database {
           email: string;
           telefone: string | null;
           caminhao_id: string | null;
+          admin_id: string | null;
           km_total: number;
           total_viagens: number;
           custo_medio_por_km: number;
@@ -93,6 +94,7 @@ export interface Database {
           email: string;
           telefone?: string | null;
           caminhao_id?: string | null;
+          admin_id?: string | null;
           km_total?: number;
           total_viagens?: number;
           custo_medio_por_km?: number;
@@ -105,6 +107,7 @@ export interface Database {
           email?: string;
           telefone?: string | null;
           caminhao_id?: string | null;
+          admin_id?: string | null;
           km_total?: number;
           total_viagens?: number;
           custo_medio_por_km?: number;
@@ -126,6 +129,7 @@ export interface Database {
           status: 'em_andamento' | 'concluida' | 'cancelada';
           origem: string | null;
           destino: string | null;
+          admin_id: string | null;
           criado_em: string;
         };
         Insert: {
@@ -141,6 +145,7 @@ export interface Database {
           status?: 'em_andamento' | 'concluida' | 'cancelada';
           origem?: string | null;
           destino?: string | null;
+          admin_id?: string | null;
           criado_em?: string;
         };
         Update: {
@@ -156,6 +161,7 @@ export interface Database {
           status?: 'em_andamento' | 'concluida' | 'cancelada';
           origem?: string | null;
           destino?: string | null;
+          admin_id?: string | null;
           criado_em?: string;
         };
         Relationships: [];
@@ -203,6 +209,7 @@ export interface Database {
           criado_por: 'motorista' | 'admin';
           criado_por_id: string | null;
           criado_por_nome: string;
+          admin_id: string | null;
           criado_em: string;
         };
         Insert: {
@@ -217,6 +224,7 @@ export interface Database {
           criado_por: 'motorista' | 'admin';
           criado_por_id?: string | null;
           criado_por_nome: string;
+          admin_id?: string | null;
           criado_em?: string;
         };
         Update: {
@@ -231,6 +239,7 @@ export interface Database {
           criado_por?: 'motorista' | 'admin';
           criado_por_id?: string | null;
           criado_por_nome?: string;
+          admin_id?: string | null;
           criado_em?: string;
         };
         Relationships: [];

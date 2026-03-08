@@ -58,6 +58,7 @@ export function useDespesas(viagemId?: string) {
     caminhaoId?: string;
     viagemId?: string;
     criadoPor: 'motorista' | 'admin';
+    adminId?: string;
   }) => {
     if (!user) return { success: false };
 
@@ -71,6 +72,7 @@ export function useDespesas(viagemId?: string) {
       criado_por: dados.criadoPor,
       criado_por_id: user.id,
       criado_por_nome: user.nome,
+      admin_id: dados.adminId || user.id,
     });
 
     if (error) {

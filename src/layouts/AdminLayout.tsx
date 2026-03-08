@@ -15,6 +15,7 @@ import {
   X,
   ChevronRight,
   Bell,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -26,6 +27,7 @@ const navItems = [
   { to: '/admin/viagens', label: 'Viagens', icon: Route },
   { to: '/admin/despesas', label: 'Despesas', icon: Receipt },
   { to: '/admin/relatorios', label: 'Relatórios', icon: BarChart3 },
+  { to: '/admin/admins', label: 'Administradores', icon: UserCog },
 ];
 
 export default function AdminLayout() {
@@ -137,7 +139,6 @@ export default function AdminLayout() {
           <div className="flex-1" />
           <button className="relative p-2 rounded-lg hover:bg-accent transition-colors">
             <Bell className="w-5 h-5 text-muted-foreground" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-primary rounded-full" />
           </button>
           <Avatar className="w-8 h-8">
             <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
