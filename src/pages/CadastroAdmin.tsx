@@ -82,29 +82,53 @@ export default function CadastroAdmin() {
     setLoading(true);
 
     try {
-      // Criar usuário no Supabase Auth com tipo admin
-      const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      // signUp funciona no frontend (ao contrário de admin.createUser)
+      const { data, error } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.senha,
-        email_confirm: true,
-        user_metadata: {
-          nome: form.nome.trim(),
-          tipo: 'admin',
+        options: {
+          data: {
+            nome: form.nome.trim(),
+            tipo: 'admin',
+          },
         },
       });
 
-      if (authError || !authData.user) {
-        if (authError?.message?.includes('already')) {
+      if (error) {
+        if (error.message?.includes('already registered') || error.message?.includes('already been registered')) {
           setErro('Já existe uma conta com este email');
         } else {
-          setErro('Erro ao criar conta. Tente novamente.');
+          setErro('Erro ao criar conta: ' + error.message);
         }
         setLoading(false);
         return;
       }
 
-      toast.success('Conta criada com sucesso! Faça login para continuar.');
-      navigate('/login');
+      if (!data.user) {
+        setErro('Erro ao criar conta. Tente novamente.');
+        setLoading(false);
+        return;
+      }
+
+      // Garantir que o profile foi criado com tipo admin
+      // (o trigger handle_new_user já faz isso, mas atualiza caso necessário)
+      await supabase
+        .from('profiles')
+        .upsert({
+          id: data.user.id,
+          nome: form.nome.trim(),
+          email: form.email.trim(),
+          tipo: 'admin',
+        });
+
+      // Fazer login automaticamente após cadastro
+      await supabase.auth.signInWithPassword({
+        email: form.email.trim(),
+        password: form.senha,
+      });
+
+      toast.success('Conta criada com sucesso! Bem-vindo ao FrotaTech!');
+      navigate('/admin');
     } catch {
       setErro('Erro inesperado. Tente novamente.');
     }
