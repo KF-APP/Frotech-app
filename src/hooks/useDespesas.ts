@@ -131,7 +131,8 @@ export function useDespesas(viagemId?: string) {
       .eq('id', id);
 
     if (error) {
-      toast.error('Erro ao atualizar despesa');
+      console.error('atualizarDespesa error:', error);
+      toast.error(`Erro ao atualizar despesa: ${error.message}`);
       return { success: false };
     }
 
@@ -144,7 +145,8 @@ export function useDespesas(viagemId?: string) {
     const { error } = await supabase.from('despesas').delete().eq('id', id);
 
     if (error) {
-      toast.error('Erro ao excluir despesa');
+      console.error('excluirDespesa error:', error);
+      toast.error(`Erro ao excluir despesa: ${error.message}`);
       return { success: false };
     }
 

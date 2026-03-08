@@ -132,7 +132,8 @@ export function useViagens(motoristaId?: string) {
   const excluirViagem = async (id: string) => {
     const { error } = await supabase.from('viagens').delete().eq('id', id);
     if (error) {
-      toast.error('Erro ao excluir viagem');
+      console.error('excluirViagem error:', error);
+      toast.error(`Erro ao excluir viagem: ${error.message}`);
       return { success: false };
     }
     toast.success('Viagem removida!');
@@ -147,20 +148,24 @@ export function useViagens(motoristaId?: string) {
     destino?: string;
     status?: 'em_andamento' | 'concluida' | 'cancelada';
   }) => {
+    const update: Record<string, unknown> = {};
+    if (dados.kmTotal !== undefined) update.km_total = dados.kmTotal;
+    if (dados.tempoTotal !== undefined) update.tempo_total = dados.tempoTotal;
+    if (dados.origem !== undefined) update.origem = dados.origem;
+    if (dados.destino !== undefined) update.destino = dados.destino;
+    if (dados.status !== undefined) {
+      update.status = dados.status;
+      if (dados.status === 'concluida') update.data_fim = new Date().toISOString();
+    }
+
     const { error } = await supabase
       .from('viagens')
-      .update({
-        km_total: dados.kmTotal,
-        tempo_total: dados.tempoTotal,
-        origem: dados.origem,
-        destino: dados.destino,
-        status: dados.status,
-        ...(dados.status === 'concluida' ? { data_fim: new Date().toISOString() } : {}),
-      })
+      .update(update)
       .eq('id', id);
 
     if (error) {
-      toast.error('Erro ao atualizar viagem');
+      console.error('atualizarViagem error:', error);
+      toast.error(`Erro ao atualizar viagem: ${error.message}`);
       return { success: false };
     }
     toast.success('Viagem atualizada!');
