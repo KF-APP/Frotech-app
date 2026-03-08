@@ -166,6 +166,27 @@ export interface Database {
         };
         Relationships: [];
       };
+      codigos_acesso: {
+        Row: {
+          id: string;
+          codigo: string;
+          ativo: boolean;
+          criado_em: string;
+        };
+        Insert: {
+          id?: string;
+          codigo: string;
+          ativo?: boolean;
+          criado_em?: string;
+        };
+        Update: {
+          id?: string;
+          codigo?: string;
+          ativo?: boolean;
+          criado_em?: string;
+        };
+        Relationships: [];
+      };
       pontos_gps: {
         Row: {
           id: string;

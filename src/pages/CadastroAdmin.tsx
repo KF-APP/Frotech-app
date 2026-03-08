@@ -20,14 +20,13 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-const CODIGO_ACESSO = 'K3P';
-
 type Etapa = 'dados' | 'codigo';
 
 export default function CadastroAdmin() {
   const navigate = useNavigate();
   const [etapa, setEtapa] = useState<Etapa>('dados');
   const [loading, setLoading] = useState(false);
+  const [verificando, setVerificando] = useState(false);
   const [erro, setErro] = useState('');
   const [mostrarSenha, setMostrarSenha] = useState(false);
   const [mostrarConfirmar, setMostrarConfirmar] = useState(false);
@@ -50,22 +49,10 @@ export default function CadastroAdmin() {
     e.preventDefault();
     setErro('');
 
-    if (!form.nome.trim()) {
-      setErro('Informe seu nome completo');
-      return;
-    }
-    if (!form.email.trim()) {
-      setErro('Informe seu email');
-      return;
-    }
-    if (form.senha.length < 6) {
-      setErro('A senha deve ter pelo menos 6 caracteres');
-      return;
-    }
-    if (form.senha !== form.confirmarSenha) {
-      setErro('As senhas não coincidem');
-      return;
-    }
+    if (!form.nome.trim()) { setErro('Informe seu nome completo'); return; }
+    if (!form.email.trim()) { setErro('Informe seu email'); return; }
+    if (form.senha.length < 6) { setErro('A senha deve ter pelo menos 6 caracteres'); return; }
+    if (form.senha !== form.confirmarSenha) { setErro('As senhas não coincidem'); return; }
 
     setEtapa('codigo');
   };
@@ -74,15 +61,32 @@ export default function CadastroAdmin() {
     e.preventDefault();
     setErro('');
 
-    if (form.codigoAcesso.trim().toUpperCase() !== CODIGO_ACESSO) {
-      setErro('Código de acesso incorreto. Verifique e tente novamente.');
+    if (!form.codigoAcesso.trim()) {
+      setErro('Digite o código de acesso');
       return;
     }
 
+    setVerificando(true);
+
+    // 1. Verificar o código de acesso na tabela do banco
+    const { data: codigoData, error: codigoError } = await supabase
+      .from('codigos_acesso')
+      .select('id')
+      .eq('codigo', form.codigoAcesso.trim().toUpperCase())
+      .eq('ativo', true)
+      .single();
+
+    if (codigoError || !codigoData) {
+      setErro('Código de acesso incorreto. Verifique e tente novamente.');
+      setVerificando(false);
+      return;
+    }
+
+    setVerificando(false);
     setLoading(true);
 
     try {
-      // signUp funciona no frontend (ao contrário de admin.createUser)
+      // 2. Criar conta via signUp (funciona no frontend)
       const { data, error } = await supabase.auth.signUp({
         email: form.email.trim(),
         password: form.senha,
@@ -95,8 +99,11 @@ export default function CadastroAdmin() {
       });
 
       if (error) {
-        if (error.message?.includes('already registered') || error.message?.includes('already been registered')) {
-          setErro('Já existe uma conta com este email');
+        if (
+          error.message?.toLowerCase().includes('already') ||
+          error.message?.toLowerCase().includes('registered')
+        ) {
+          setErro('Já existe uma conta com este email.');
         } else {
           setErro('Erro ao criar conta: ' + error.message);
         }
@@ -110,25 +117,18 @@ export default function CadastroAdmin() {
         return;
       }
 
-      // Garantir que o profile foi criado com tipo admin
-      // (o trigger handle_new_user já faz isso, mas atualiza caso necessário)
-      await supabase
-        .from('profiles')
-        .upsert({
-          id: data.user.id,
-          nome: form.nome.trim(),
-          email: form.email.trim(),
-          tipo: 'admin',
-        });
-
-      // Fazer login automaticamente após cadastro
-      await supabase.auth.signInWithPassword({
+      // 3. Garantir que o profile foi criado com tipo 'admin'
+      //    O trigger handle_new_user já faz isso automaticamente,
+      //    mas fazemos upsert para garantir caso o trigger falhe.
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        nome: form.nome.trim(),
         email: form.email.trim(),
-        password: form.senha,
+        tipo: 'admin',
       });
 
-      toast.success('Conta criada com sucesso! Bem-vindo ao FrotaTech!');
-      navigate('/admin');
+      toast.success('Conta criada com sucesso! Faça login para acessar o painel.');
+      navigate('/login');
     } catch {
       setErro('Erro inesperado. Tente novamente.');
     }
@@ -156,7 +156,7 @@ export default function CadastroAdmin() {
         <div className="flex items-center justify-center gap-3">
           <div className="flex items-center gap-2">
             <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-              etapa === 'dados' ? 'bg-primary text-primary-foreground' : 'bg-primary text-primary-foreground'
+              etapa === 'codigo' ? 'bg-primary/80 text-primary-foreground' : 'bg-primary text-primary-foreground'
             }`}>
               {etapa === 'codigo' ? <CheckCircle2 className="w-4 h-4" /> : '1'}
             </div>
@@ -177,7 +177,7 @@ export default function CadastroAdmin() {
           </div>
         </div>
 
-        {/* Etapa 1: Dados pessoais */}
+        {/* Etapa 1: Dados */}
         {etapa === 'dados' && (
           <Card>
             <CardHeader>
@@ -296,7 +296,7 @@ export default function CadastroAdmin() {
             <CardContent>
               <form onSubmit={handleFinalizar} className="space-y-4">
                 {/* Resumo dos dados */}
-                <div className="bg-muted/50 rounded-lg p-3 space-y-1 text-sm">
+                <div className="bg-muted/50 rounded-lg p-3 space-y-0.5 text-sm border border-border">
                   <p className="font-medium">{form.nome}</p>
                   <p className="text-muted-foreground">{form.email}</p>
                 </div>
@@ -311,7 +311,7 @@ export default function CadastroAdmin() {
                       placeholder="Digite o código"
                       value={form.codigoAcesso}
                       onChange={upd('codigoAcesso')}
-                      className="pl-10 pr-10 tracking-widest text-center font-mono text-lg"
+                      className="pl-10 pr-10 tracking-widest text-center font-mono text-lg uppercase"
                       required
                       autoFocus
                       autoComplete="off"
@@ -342,12 +342,13 @@ export default function CadastroAdmin() {
                     variant="outline"
                     className="flex-1"
                     onClick={() => { setEtapa('dados'); setErro(''); }}
+                    disabled={loading || verificando}
                   >
                     <ArrowLeft className="w-4 h-4 mr-1.5" />
                     Voltar
                   </Button>
-                  <Button type="submit" className="flex-1" disabled={loading}>
-                    {loading ? 'Criando conta...' : 'Finalizar cadastro'}
+                  <Button type="submit" className="flex-1" disabled={loading || verificando}>
+                    {verificando ? 'Verificando...' : loading ? 'Criando conta...' : 'Finalizar cadastro'}
                   </Button>
                 </div>
               </form>
@@ -355,7 +356,6 @@ export default function CadastroAdmin() {
           </Card>
         )}
 
-        {/* Link voltar ao login */}
         <p className="text-center text-sm text-muted-foreground">
           Já tem uma conta?{' '}
           <Link to="/login" className="text-primary font-medium hover:underline">
