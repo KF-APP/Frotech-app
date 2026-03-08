@@ -1,5 +1,8 @@
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import {
   BarChart,
@@ -22,10 +25,13 @@ import {
   Fuel,
   Wrench,
   TrendingDown,
+  TrendingUp,
   Clock,
   MapPin,
   ArrowUpRight,
   ArrowDownRight,
+  Calendar,
+  X,
 } from 'lucide-react';
 import { formatarMoeda, formatarKm, formatarTempo } from '../../utils/formatters';
 import { useViagens } from '@/hooks/useViagens';
@@ -36,34 +42,87 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const COLORS = ['var(--color-chart-1)', 'var(--color-chart-2)', 'var(--color-chart-3)', 'var(--color-chart-4)', 'var(--color-chart-5)'];
 
+function getDefaultPeriod() {
+  const hoje = new Date();
+  const inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  return {
+    inicio: inicio.toISOString().slice(0, 10),
+    fim: hoje.toISOString().slice(0, 10),
+  };
+}
+
 export default function Dashboard() {
   const { viagens, loading: loadingViagens } = useViagens();
   const { despesas, loading: loadingDespesas } = useDespesas();
   const { motoristas, loading: loadingMotoristas } = useMotoristas();
   const { caminhoes, loading: loadingCaminhoes } = useCaminhoes();
 
+  const defaultPeriod = getDefaultPeriod();
+  const [dataInicio, setDataInicio] = useState(defaultPeriod.inicio);
+  const [dataFim, setDataFim] = useState(defaultPeriod.fim);
+  const [filtroAtivo, setFiltroAtivo] = useState(true);
+
   const loading = loadingViagens || loadingDespesas || loadingMotoristas || loadingCaminhoes;
 
+  // Filtrar por período
+  const viagensFiltradas = useMemo(() => {
+    if (!filtroAtivo) return viagens;
+    return viagens.filter(v => {
+      const data = v.dataInicio.slice(0, 10);
+      return data >= dataInicio && data <= dataFim;
+    });
+  }, [viagens, dataInicio, dataFim, filtroAtivo]);
+
+  const despesasFiltradas = useMemo(() => {
+    if (!filtroAtivo) return despesas;
+    return despesas.filter(d => {
+      const data = d.data.slice(0, 10);
+      return data >= dataInicio && data <= dataFim;
+    });
+  }, [despesas, dataInicio, dataFim, filtroAtivo]);
+
   const viagensEmAndamento = viagens.filter(v => v.status === 'em_andamento');
-  const viagensConcluidas = viagens.filter(v => v.status === 'concluida');
+  const viagensConcluidas = viagensFiltradas.filter(v => v.status === 'concluida');
 
   const totalKm = viagensConcluidas.reduce((acc, v) => acc + (v.kmTotal || 0), 0);
-  const totalDespesas = despesas.reduce((acc, d) => acc + d.valor, 0);
-  const totalCombustivel = despesas.filter(d => d.tipoDespesa === 'combustivel').reduce((acc, d) => acc + d.valor, 0);
-  const totalManutencao = despesas.filter(d => ['manutencao', 'pneu', 'revisao'].includes(d.tipoDespesa)).reduce((acc, d) => acc + d.valor, 0);
+  const totalDespesas = despesasFiltradas.reduce((acc, d) => acc + d.valor, 0);
+  const totalCombustivel = despesasFiltradas.filter(d => d.tipoDespesa === 'combustivel').reduce((acc, d) => acc + d.valor, 0);
+  const totalManutencao = despesasFiltradas.filter(d => ['manutencao', 'pneu', 'revisao'].includes(d.tipoDespesa)).reduce((acc, d) => acc + d.valor, 0);
   const tempoMedioMin = viagensConcluidas.filter(v => v.tempoTotal).length > 0
     ? viagensConcluidas.filter(v => v.tempoTotal).reduce((acc, v) => acc + (v.tempoTotal || 0), 0) / viagensConcluidas.filter(v => v.tempoTotal).length
     : 0;
   const custoKm = totalKm > 0 ? totalDespesas / totalKm : 0;
 
-  // Group despesas by category for pie chart
+  // Lucro: receita (viagens concluídas × valor_diaria do caminhão) - despesas
+  const receitaBruta = useMemo(() => {
+    return viagensConcluidas.reduce((acc, v) => {
+      const caminhao = caminhoes.find(c => c.id === v.caminhaoId);
+      return acc + (caminhao?.valorDiaria || 0);
+    }, 0);
+  }, [viagensConcluidas, caminhoes]);
+
+  const lucro = receitaBruta - totalDespesas;
+  const temReceita = caminhoes.some(c => c.valorDiaria > 0);
+
+  // Despesas por categoria para gráfico de pizza
   const despesasPorCategoria = [
     { name: 'Combustível', value: totalCombustivel, fill: 'var(--color-chart-1)' },
     { name: 'Manutenção', value: totalManutencao, fill: 'var(--color-chart-2)' },
-    { name: 'Pedágio', value: despesas.filter(d => d.tipoDespesa === 'pedagio').reduce((a, d) => a + d.valor, 0), fill: 'var(--color-chart-3)' },
-    { name: 'Alimentação', value: despesas.filter(d => d.tipoDespesa === 'alimentacao').reduce((a, d) => a + d.valor, 0), fill: 'var(--color-chart-4)' },
-    { name: 'Outros', value: despesas.filter(d => ['seguro', 'licenciamento', 'ipva', 'outros'].includes(d.tipoDespesa)).reduce((a, d) => a + d.valor, 0), fill: 'var(--color-chart-5)' },
+    { name: 'Pedágio', value: despesasFiltradas.filter(d => d.tipoDespesa === 'pedagio').reduce((a, d) => a + d.valor, 0), fill: 'var(--color-chart-3)' },
+    { name: 'Alimentação', value: despesasFiltradas.filter(d => d.tipoDespesa === 'alimentacao').reduce((a, d) => a + d.valor, 0), fill: 'var(--color-chart-4)' },
+    { name: 'Outros', value: despesasFiltradas.filter(d => ['seguro', 'licenciamento', 'ipva', 'outros'].includes(d.tipoDespesa)).reduce((a, d) => a + d.valor, 0), fill: 'var(--color-chart-5)' },
   ].filter(d => d.value > 0);
+
+  const limparFiltro = () => {
+    const p = getDefaultPeriod();
+    setDataInicio(p.inicio);
+    setDataFim(p.fim);
+    setFiltroAtivo(true);
+  };
+
+  const aplicarTodoHistorico = () => {
+    setFiltroAtivo(false);
+  };
 
   if (loading) {
     return (
@@ -87,6 +146,93 @@ export default function Dashboard() {
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-muted-foreground text-sm mt-1">Visão geral da operação da frota</p>
       </div>
+
+      {/* Filtro de Período */}
+      <Card>
+        <CardContent className="pt-4 pb-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex items-center gap-2 shrink-0">
+              <Calendar className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium">Período</span>
+            </div>
+            <div className="flex items-center gap-2 flex-1 min-w-0">
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">De</span>
+                <Input
+                  type="date"
+                  value={dataInicio}
+                  onChange={e => { setDataInicio(e.target.value); setFiltroAtivo(true); }}
+                  className="h-8 text-sm w-36"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="text-xs text-muted-foreground">Até</span>
+                <Input
+                  type="date"
+                  value={dataFim}
+                  onChange={e => { setDataFim(e.target.value); setFiltroAtivo(true); }}
+                  className="h-8 text-sm w-36"
+                />
+              </div>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const hoje = new Date();
+                  setDataInicio(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10));
+                  setDataFim(hoje.toISOString().slice(0, 10));
+                  setFiltroAtivo(true);
+                }}
+                className="h-8 text-xs"
+              >
+                Este mês
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  const hoje = new Date();
+                  const inicioSemana = new Date(hoje);
+                  inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+                  setDataInicio(inicioSemana.toISOString().slice(0, 10));
+                  setDataFim(hoje.toISOString().slice(0, 10));
+                  setFiltroAtivo(true);
+                }}
+                className="h-8 text-xs"
+              >
+                Esta semana
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={aplicarTodoHistorico}
+                className={cn("h-8 text-xs", !filtroAtivo && "border-primary text-primary")}
+              >
+                Todo histórico
+              </Button>
+              {filtroAtivo && (
+                <Button size="sm" variant="ghost" onClick={limparFiltro} className="h-8 text-xs text-muted-foreground">
+                  <X className="w-3 h-3 mr-1" />
+                  Limpar
+                </Button>
+              )}
+            </div>
+          </div>
+          {filtroAtivo && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Exibindo dados de <strong>{new Date(dataInicio + 'T00:00:00').toLocaleDateString('pt-BR')}</strong> até <strong>{new Date(dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>
+              {' '}�� {viagensFiltradas.length} viagem(ns) e {despesasFiltradas.length} despesa(s)
+            </p>
+          )}
+          {!filtroAtivo && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Exibindo <strong>todo o histórico</strong> — {viagensFiltradas.length} viagem(ns) e {despesasFiltradas.length} despesa(s)
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Alerta viagens em andamento */}
       {viagensEmAndamento.length > 0 && (
@@ -112,7 +258,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           title="Total de Viagens"
-          value={viagens.length.toString()}
+          value={viagensFiltradas.length.toString()}
           icon={Route}
           trend={`${viagensConcluidas.length} concluídas`}
           positive
@@ -128,7 +274,7 @@ export default function Dashboard() {
           title="Total Despesas"
           value={formatarMoeda(totalDespesas)}
           icon={DollarSign}
-          trend={`${despesas.length} lançamentos`}
+          trend={`${despesasFiltradas.length} lançamentos`}
           positive={false}
         />
         <KpiCard
@@ -139,6 +285,60 @@ export default function Dashboard() {
           positive
         />
       </div>
+
+      {/* Card de Lucro */}
+      {temReceita && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card className={cn(lucro >= 0 ? "border-emerald-500/30 bg-emerald-50/30 dark:bg-emerald-950/20" : "border-destructive/30 bg-destructive/5")}>
+            <CardContent className="pt-4">
+              <div className="flex items-start justify-between">
+                <div className={cn("rounded-lg p-2", lucro >= 0 ? "bg-emerald-100 dark:bg-emerald-900/40" : "bg-destructive/10")}>
+                  <TrendingUp className={cn("w-5 h-5", lucro >= 0 ? "text-emerald-600" : "text-destructive")} />
+                </div>
+                <span className={cn("text-xs font-medium", lucro >= 0 ? "text-emerald-600" : "text-destructive")}>
+                  {lucro >= 0 ? "Positivo" : "Negativo"}
+                </span>
+              </div>
+              <div className="mt-3">
+                <p className={cn("text-2xl font-bold", lucro >= 0 ? "text-emerald-600" : "text-destructive")}>
+                  {formatarMoeda(Math.abs(lucro))}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Lucro do período</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-start justify-between">
+                <div className="bg-primary/10 rounded-lg p-2">
+                  <DollarSign className="w-5 h-5 text-primary" />
+                </div>
+                <span className="text-xs font-medium text-emerald-600">Bruto</span>
+              </div>
+              <div className="mt-3">
+                <p className="text-2xl font-bold text-foreground">{formatarMoeda(receitaBruta)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Receita bruta ({viagensConcluidas.length} viag.)</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="pt-4">
+              <div className="flex items-start justify-between">
+                <div className="bg-destructive/10 rounded-lg p-2">
+                  <TrendingDown className="w-5 h-5 text-destructive" />
+                </div>
+                <span className="text-xs font-medium text-destructive">Custos</span>
+              </div>
+              <div className="mt-3">
+                <p className="text-2xl font-bold text-foreground">{formatarMoeda(totalDespesas)}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Total de despesas no período</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Segunda linha de KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -183,7 +383,7 @@ export default function Dashboard() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Despesas por Categoria</CardTitle>
-              <CardDescription>Distribuição dos gastos</CardDescription>
+              <CardDescription>Distribuição dos gastos no período</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-4">
@@ -221,18 +421,18 @@ export default function Dashboard() {
         )}
 
         {/* Viagens por status */}
-        {viagens.length > 0 && (
+        {viagensFiltradas.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Últimas Viagens</CardTitle>
-              <CardDescription>Status das viagens recentes</CardDescription>
+              <CardTitle className="text-base">Viagens do Período</CardTitle>
+              <CardDescription>Status das viagens no período selecionado</CardDescription>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={200}>
                 <BarChart data={[
-                  { status: 'Em andamento', qtd: viagensEmAndamento.length, fill: 'var(--color-chart-1)' },
+                  { status: 'Em andamento', qtd: viagensFiltradas.filter(v => v.status === 'em_andamento').length, fill: 'var(--color-chart-1)' },
                   { status: 'Concluídas', qtd: viagensConcluidas.length, fill: 'var(--color-chart-2)' },
-                  { status: 'Canceladas', qtd: viagens.filter(v => v.status === 'cancelada').length, fill: 'var(--color-chart-5)' },
+                  { status: 'Canceladas', qtd: viagensFiltradas.filter(v => v.status === 'cancelada').length, fill: 'var(--color-chart-5)' },
                 ]}>
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                   <XAxis dataKey="status" tick={{ fontSize: 11 }} />
@@ -277,7 +477,7 @@ export default function Dashboard() {
         </Card>
       )}
 
-      {/* Custo por KM evolução (static placeholder) */}
+      {/* Ranking de motoristas */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Custo Médio por KM</CardTitle>
@@ -329,16 +529,16 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Linha de custo placeholder */}
-      {despesas.length > 0 && (
+      {/* Evolução de despesas */}
+      {despesasFiltradas.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Evolução de Despesas</CardTitle>
-            <CardDescription>Últimas 6 despesas registradas</CardDescription>
+            <CardDescription>Últimas despesas no período</CardDescription>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={180}>
-              <LineChart data={despesas.slice(0, 6).reverse().map((d, i) => ({ idx: i + 1, valor: d.valor }))}>
+              <LineChart data={despesasFiltradas.slice(0, 20).reverse().map((d, i) => ({ idx: i + 1, valor: d.valor }))}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
                 <XAxis dataKey="idx" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `R$${v}`} />
