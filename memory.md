@@ -42,3 +42,17 @@
 - Migration: `supabase/migrations/20260308105045_pagamentos.sql` (executada via management API)
 - Para exec SQL direto: usar env.SUPABASE_ACCESS_TOKEN (sbp_...) com /v1/projects/{ref}/database/query
 - TypeScript: zero erros confirmados
+
+### PWA + Persistência de Viagem (adicionado em 08/03/2026)
+- `public/manifest.json` — manifesto PWA (instalável no celular, tela cheia, tema azul escuro)
+- `public/sw.js` — service worker com cache de assets estáticos + SPA fallback offline
+- `index.html` — meta tags PWA (apple-mobile-web-app-capable, theme-color, manifest link, registro SW)
+- `supabase/migrations/20260308200000_viagem_persistencia.sql` — coluna `km_percorrido` em viagens, índices GPS
+- `AppMotorista.tsx` refatorado com:
+  - Verificação de viagem ativa ao abrir o app (busca no banco por `status = em_andamento`)
+  - Retomada automática: recupera km dos pontos_gps + localStorage, reinicia timer e GPS
+  - GPS via `watchPosition` (localização em tempo real) + `setInterval 10s` (salva pontos no banco)
+  - `localStorage` como camada de fallback offline (chave: `frotatech_viagem_ativa`)
+  - `km_percorrido` persistido no banco a cada 30s durante a viagem
+  - Refs (`kmPercorridoRef`, `viagemIdRef`, `ultimoPontoRef`) para callbacks sem stale closure
+  - Filtro anti-GPS falso: ignora pontos com distância >5km em 10s

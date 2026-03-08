@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -39,6 +39,8 @@ import {
   Truck,
   ImagePlus,
   X,
+  Wifi,
+  WifiOff,
 } from 'lucide-react';
 import type { PontoGPS, TipoDespesa } from '../../types';
 import { formatarTempo, formatarData, formatarKm } from '../../utils/formatters';
@@ -73,6 +75,37 @@ function calcularDistancia(p1: PontoGPS, p2: PontoGPS): number {
   return R * c;
 }
 
+// Chave para persistência local (fallback offline)
+const STORAGE_KEY = 'frotatech_viagem_ativa';
+
+interface ViagemSalva {
+  viagemId: string;
+  tempoInicio: string;
+  kmPercorrido: number;
+}
+
+function salvarLocalStorage(dados: ViagemSalva) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(dados));
+  } catch (_) {}
+}
+
+function lerLocalStorage(): ViagemSalva | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as ViagemSalva;
+  } catch (_) {
+    return null;
+  }
+}
+
+function limparLocalStorage() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (_) {}
+}
+
 export default function AppMotorista() {
   const { user, logout, motoristaId } = useAuth();
   const navigate = useNavigate();
@@ -90,8 +123,16 @@ export default function AppMotorista() {
   const [dialogDespesa, setDialogDespesa] = useState(false);
   const [dialogEncerrar, setDialogEncerrar] = useState(false);
   const [salvandoViagem, setSalvandoViagem] = useState(false);
+  const [verificandoViagem, setVerificandoViagem] = useState(true);
+  const [retomandoViagem, setRetomandoViagem] = useState(false);
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsWatchRef = useRef<number | null>(null);
+  const gpsIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const ultimoPontoRef = useRef<PontoGPS | null>(null);
+  const kmPercorridoRef = useRef(0);
+  const viagemIdRef = useRef<string | null>(null);
+
   const [formDespesa, setFormDespesa] = useState({
     tipoDespesa: '' as TipoDespesa | '',
     valor: '',
@@ -101,7 +142,6 @@ export default function AppMotorista() {
   const [comprovantePreview, setComprovantePreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Get motorista data to find caminhao and admin_id
   const [motoristaData, setMotoristaData] = useState<{
     nome: string;
     caminhao_id: string | null;
@@ -141,55 +181,160 @@ export default function AppMotorista() {
   const { viagens, iniciarViagem: iniciarViagemBanco, finalizarViagem, salvarPontoGPS } = useViagens(motoristaId);
   const { criarDespesa } = useDespesas();
 
-  // Timer da viagem
+  // Sync kmPercorridoRef whenever state changes
+  useEffect(() => {
+    kmPercorridoRef.current = kmPercorrido;
+  }, [kmPercorrido]);
+
+  // Sync viagemIdRef whenever state changes
+  useEffect(() => {
+    viagemIdRef.current = viagemAtivaId;
+  }, [viagemAtivaId]);
+
+  // ── VERIFICAR VIAGEM ATIVA AO CARREGAR ──
+  useEffect(() => {
+    if (!motoristaId) return;
+
+    async function verificarViagemAtiva() {
+      setVerificandoViagem(true);
+      try {
+        // Busca viagem ativa no banco
+        const { data } = await supabase
+          .from('viagens')
+          .select('*')
+          .eq('motorista_id', motoristaId)
+          .eq('status', 'em_andamento')
+          .order('data_inicio', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (data) {
+          // Existe viagem ativa — retomar!
+          setRetomandoViagem(true);
+          const viagemId = data.id as string;
+          const dataInicio = new Date(data.data_inicio as string);
+
+          // Calcular km já percorrido (soma pontos GPS salvos)
+          const { data: pontos } = await supabase
+            .from('pontos_gps')
+            .select('lat, lng, timestamp, velocidade, precisao')
+            .eq('viagem_id', viagemId)
+            .order('timestamp', { ascending: true });
+
+          let kmRecuperado = 0;
+          const pontosConvertidos: PontoGPS[] = [];
+
+          if (pontos && pontos.length > 0) {
+            for (let i = 0; i < pontos.length; i++) {
+              const p: PontoGPS = {
+                lat: Number(pontos[i].lat),
+                lng: Number(pontos[i].lng),
+                timestamp: pontos[i].timestamp as string,
+                velocidade: pontos[i].velocidade ? Number(pontos[i].velocidade) : undefined,
+                precisao: pontos[i].precisao ? Number(pontos[i].precisao) : undefined,
+              };
+              pontosConvertidos.push(p);
+              if (i > 0) {
+                kmRecuperado += calcularDistancia(pontosConvertidos[i - 1], p);
+              }
+            }
+          }
+
+          // Também verifica localStorage (pode ter km mais recente)
+          const local = lerLocalStorage();
+          if (local && local.viagemId === viagemId && local.kmPercorrido > kmRecuperado) {
+            kmRecuperado = local.kmPercorrido;
+          }
+
+          setViagemAtivaId(viagemId);
+          viagemIdRef.current = viagemId;
+          setViagemAtiva(true);
+          setTempoInicio(dataInicio);
+          setKmPercorrido(kmRecuperado);
+          kmPercorridoRef.current = kmRecuperado;
+          setPontoGPS(pontosConvertidos);
+          if (pontosConvertidos.length > 0) {
+            ultimoPontoRef.current = pontosConvertidos[pontosConvertidos.length - 1];
+          }
+
+          // Salvar no localStorage
+          salvarLocalStorage({ viagemId, tempoInicio: dataInicio.toISOString(), kmPercorrido: kmRecuperado });
+
+          iniciarGPS(viagemId);
+          setTela('home');
+          toast.success('Viagem retomada automaticamente!');
+          setRetomandoViagem(false);
+        } else {
+          // Sem viagem ativa no banco — verifica localStorage
+          limparLocalStorage();
+        }
+      } catch (_) {
+        // Sem viagem ativa (erro 406 = nenhuma linha encontrada, é normal)
+        limparLocalStorage();
+      } finally {
+        setVerificandoViagem(false);
+        setRetomandoViagem(false);
+      }
+    }
+
+    verificarViagemAtiva();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [motoristaId]);
+
+  // ── TIMER DA VIAGEM ──
   useEffect(() => {
     if (viagemAtiva && tempoInicio) {
+      // Calcula imediatamente ao montar
+      setTempoDecorrido(Math.floor((Date.now() - tempoInicio.getTime()) / 1000 / 60));
+
       intervalRef.current = setInterval(() => {
         setTempoDecorrido(Math.floor((Date.now() - tempoInicio.getTime()) / 1000 / 60));
       }, 30000);
+
       return () => {
         if (intervalRef.current) clearInterval(intervalRef.current);
       };
     }
   }, [viagemAtiva, tempoInicio]);
 
-  const iniciarGPS = (viagemId: string) => {
+  // ── PERSISTÊNCIA PERIÓDICA NO BANCO ──
+  // Salva km_percorrido no banco a cada 30s para retomada precisa
+  const persistirKm = useCallback(async () => {
+    const id = viagemIdRef.current;
+    if (!id) return;
+    try {
+      await supabase
+        .from('viagens')
+        .update({ km_percorrido: kmPercorridoRef.current } as Record<string, unknown>)
+        .eq('id', id);
+      salvarLocalStorage({
+        viagemId: id,
+        tempoInicio: tempoInicio?.toISOString() || new Date().toISOString(),
+        kmPercorrido: kmPercorridoRef.current,
+      });
+    } catch (_) {}
+  }, [tempoInicio]);
+
+  useEffect(() => {
+    if (viagemAtiva) {
+      const pid = setInterval(persistirKm, 30000);
+      return () => clearInterval(pid);
+    }
+  }, [viagemAtiva, persistirKm]);
+
+  // ── GPS ──
+  const iniciarGPS = useCallback((viagemId: string) => {
     if (!navigator.geolocation) {
-      setGpsErro('GPS não disponível neste dispositivo');
+      setGpsErro('GPS n��o disponível neste dispositivo');
       return;
     }
 
+    // Watch contínuo para atualizar localização em tempo real
     gpsWatchRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         setLocalizacaoAtual(pos);
         setGpsAtivo(true);
         setGpsErro('');
-
-        const novoPonto: PontoGPS = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          timestamp: new Date().toISOString(),
-          velocidade: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : undefined,
-          precisao: pos.coords.accuracy,
-        };
-
-        setPontoGPS(prev => {
-          const novo = [...prev, novoPonto];
-          if (prev.length > 0) {
-            const distancia = calcularDistancia(prev[prev.length - 1], novoPonto);
-            setKmPercorrido(km => km + distancia);
-          }
-          return novo;
-        });
-
-        // Save GPS point to database every 5 points
-        salvarPontoGPS(
-          viagemId,
-          pos.coords.latitude,
-          pos.coords.longitude,
-          pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : undefined,
-          pos.coords.accuracy
-        );
       },
       (err) => {
         setGpsErro(`Erro GPS: ${err.message}`);
@@ -197,11 +342,89 @@ export default function AppMotorista() {
       },
       {
         enableHighAccuracy: true,
-        timeout: 10000,
+        timeout: 15000,
         maximumAge: 5000,
       }
     );
-  };
+
+    // Intervalo de 10 segundos para capturar e salvar pontos GPS
+    if (gpsIntervalRef.current) clearInterval(gpsIntervalRef.current);
+
+    gpsIntervalRef.current = setInterval(() => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setGpsAtivo(true);
+          setGpsErro('');
+
+          const novoPonto: PontoGPS = {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            timestamp: new Date().toISOString(),
+            velocidade: pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : undefined,
+            precisao: pos.coords.accuracy,
+          };
+
+          // Calcular distância incremental
+          if (ultimoPontoRef.current) {
+            const distancia = calcularDistancia(ultimoPontoRef.current, novoPonto);
+            // Ignora pontos com distância absurda (>5km em 10s = GPS falso)
+            if (distancia < 5) {
+              setKmPercorrido(km => {
+                const novo = km + distancia;
+                kmPercorridoRef.current = novo;
+                return novo;
+              });
+            }
+          }
+
+          ultimoPontoRef.current = novoPonto;
+          setPontoGPS(prev => [...prev, novoPonto]);
+
+          // Salva ponto no banco
+          salvarPontoGPS(
+            viagemId,
+            pos.coords.latitude,
+            pos.coords.longitude,
+            pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : undefined,
+            pos.coords.accuracy
+          );
+
+          // Persiste km no localStorage
+          salvarLocalStorage({
+            viagemId,
+            tempoInicio: tempoInicio?.toISOString() || new Date().toISOString(),
+            kmPercorrido: kmPercorridoRef.current,
+          });
+        },
+        () => {}, // Ignora erros pontuais no intervalo
+        {
+          enableHighAccuracy: true,
+          timeout: 8000,
+          maximumAge: 0,
+        }
+      );
+    }, 10000);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [salvarPontoGPS]);
+
+  const pararGPS = useCallback(() => {
+    if (gpsWatchRef.current !== null) {
+      navigator.geolocation.clearWatch(gpsWatchRef.current);
+      gpsWatchRef.current = null;
+    }
+    if (gpsIntervalRef.current) {
+      clearInterval(gpsIntervalRef.current);
+      gpsIntervalRef.current = null;
+    }
+  }, []);
+
+  // Cleanup ao desmontar
+  useEffect(() => {
+    return () => {
+      pararGPS();
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [pararGPS]);
 
   const handleIniciarViagem = async () => {
     if (!motoristaId || !user) {
@@ -223,13 +446,24 @@ export default function AppMotorista() {
     });
 
     if (result.success && result.viagemId) {
+      const agora = new Date();
       setViagemAtivaId(result.viagemId);
+      viagemIdRef.current = result.viagemId;
       setViagemAtiva(true);
-      setTempoInicio(new Date());
+      setTempoInicio(agora);
       setTempoDecorrido(0);
       setKmPercorrido(0);
+      kmPercorridoRef.current = 0;
+      ultimoPontoRef.current = null;
       setPontoGPS([]);
       setDespesas([]);
+
+      salvarLocalStorage({
+        viagemId: result.viagemId,
+        tempoInicio: agora.toISOString(),
+        kmPercorrido: 0,
+      });
+
       iniciarGPS(result.viagemId);
       setTela('viagem');
     }
@@ -240,19 +474,17 @@ export default function AppMotorista() {
 
     setSalvandoViagem(true);
 
-    if (gpsWatchRef.current !== null) {
-      navigator.geolocation.clearWatch(gpsWatchRef.current);
-    }
+    pararGPS();
     if (intervalRef.current) clearInterval(intervalRef.current);
 
-    const kmFinal = Math.max(kmPercorrido, 0);
+    const kmFinal = Math.max(kmPercorridoRef.current, 0);
 
     await finalizarViagem(viagemAtivaId, {
       kmTotal: kmFinal,
       tempoTotal: tempoDecorrido,
     });
 
-    // Save all local despesas to database (including comprovante photos)
+    // Salva todas as despesas locais no banco
     for (const d of despesas) {
       await criarDespesa({
         tipoDespesa: d.tipoDespesa,
@@ -267,11 +499,15 @@ export default function AppMotorista() {
       });
     }
 
+    limparLocalStorage();
+
     setViagemAtiva(false);
     setViagemAtivaId(null);
+    viagemIdRef.current = null;
     setGpsAtivo(false);
     setDialogEncerrar(false);
     setSalvandoViagem(false);
+    setDespesas([]);
 
     toast.success(`Viagem salva! ${kmFinal.toFixed(2)} km percorridos em ${formatarTempo(tempoDecorrido)}`);
     setTela('home');
@@ -329,6 +565,20 @@ export default function AppMotorista() {
 
   const historico = viagens.filter(v => v.status === 'concluida');
 
+  // Tela de carregamento enquanto verifica viagem ativa
+  if (verificandoViagem) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <div className="bg-sidebar rounded-2xl p-6 flex flex-col items-center gap-4">
+          <Truck className="w-12 h-12 text-sidebar-foreground animate-pulse" />
+          <p className="text-sidebar-foreground font-semibold">
+            {retomandoViagem ? 'Retomando viagem...' : 'Carregando...'}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-sm mx-auto">
       {/* Header */}
@@ -358,7 +608,7 @@ export default function AppMotorista() {
         {[
           { id: 'home', icon: Navigation, label: 'Início' },
           { id: 'viagem', icon: Route, label: 'Viagem', disabled: !viagemAtiva },
-          { id: 'historico', icon: History, label: 'Hist��rico' },
+          { id: 'historico', icon: History, label: 'Histórico' },
         ].map(tab => (
           <button
             key={tab.id}
@@ -448,10 +698,19 @@ export default function AppMotorista() {
                 </div>
 
                 <div className={`flex items-center gap-2 p-3 rounded-lg ${gpsAtivo ? 'bg-green-500/10' : 'bg-yellow-500/10'}`}>
-                  <div className={`w-2 h-2 rounded-full ${gpsAtivo ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
-                  <p className="text-xs">
-                    {gpsAtivo ? `GPS ativo · ${pontoGPS.length} pontos registrados` : gpsErro || 'Aguardando GPS...'}
-                  </p>
+                  {gpsAtivo
+                    ? <Wifi className="w-4 h-4 text-green-600" />
+                    : <WifiOff className="w-4 h-4 text-yellow-600" />
+                  }
+                  <div className="flex-1">
+                    <p className="text-xs font-medium">
+                      {gpsAtivo ? 'Rastreamento ativo' : gpsErro || 'Aguardando GPS...'}
+                    </p>
+                    {gpsAtivo && (
+                      <p className="text-xs text-muted-foreground">{pontoGPS.length} pontos registrados · atualiza a cada 10s</p>
+                    )}
+                  </div>
+                  {gpsAtivo && <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />}
                 </div>
 
                 <Button
@@ -478,7 +737,13 @@ export default function AppMotorista() {
         {/* VIAGEM */}
         {tela === 'viagem' && viagemAtiva && (
           <div className="space-y-4">
-            <h2 className="text-lg font-bold">Em Rota</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold">Em Rota</h2>
+              <div className={`flex items-center gap-1.5 text-xs ${gpsAtivo ? 'text-green-600' : 'text-yellow-600'}`}>
+                {gpsAtivo ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
+                {gpsAtivo ? 'GPS ativo' : 'Sem GPS'}
+              </div>
+            </div>
 
             <div className="grid grid-cols-3 gap-2">
               <Card>
@@ -520,10 +785,13 @@ export default function AppMotorista() {
                     <p>Lat: {localizacaoAtual.coords.latitude.toFixed(6)}</p>
                     <p>Lng: {localizacaoAtual.coords.longitude.toFixed(6)}</p>
                     <p>Precisão: ±{Math.round(localizacaoAtual.coords.accuracy)}m</p>
+                    {localizacaoAtual.coords.speed !== null && localizacaoAtual.coords.speed !== undefined && (
+                      <p>Velocidade: {Math.round(localizacaoAtual.coords.speed * 3.6)} km/h</p>
+                    )}
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    {gpsErro || 'Aguardando localiza��ão GPS...'}
+                    {gpsErro || 'Aguardando localização GPS...'}
                   </p>
                 )}
               </CardContent>
@@ -627,7 +895,7 @@ export default function AppMotorista() {
                   <SelectValue placeholder="Selecionar tipo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="combustivel">Combustível</SelectItem>
+                  <SelectItem value="combustivel">Combust��vel</SelectItem>
                   <SelectItem value="pedagio">Pedágio</SelectItem>
                   <SelectItem value="alimentacao">Alimentação</SelectItem>
                   <SelectItem value="outros">Outros</SelectItem>
@@ -653,7 +921,6 @@ export default function AppMotorista() {
                 rows={2}
               />
             </div>
-            {/* Upload de comprovante */}
             <div className="space-y-2">
               <input
                 ref={fileInputRef}
