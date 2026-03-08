@@ -7,9 +7,9 @@ export function formatarMoeda(valor: number): string {
 
 export function formatarKm(km: number): string {
   if (km >= 1000) {
-    return `${(km / 1000).toFixed(1).replace('.', ',')} mil km`;
+    return `${(km / 1000).toFixed(2).replace('.', ',')} mil km`;
   }
-  return `${km} km`;
+  return `${Number(km.toFixed(2)).toLocaleString('pt-BR')} km`;
 }
 
 export function formatarTempo(minutos: number): string {

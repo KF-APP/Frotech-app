@@ -198,6 +198,17 @@ export function usePagamentos() {
       return { success: false, semCiclos: true };
     }
 
+    // Busca caminhões para obter valor_diaria (igual ao cálculo do Dashboard)
+    const { data: caminhoes } = await supabase
+      .from('caminhoes')
+      .select('id, valor_diaria')
+      .eq('admin_id', user.id);
+
+    const valorDiariaPorCaminhao: Record<string, number> = {};
+    for (const c of (caminhoes || [])) {
+      valorDiariaPorCaminhao[c.id] = Number(c.valor_diaria) || 0;
+    }
+
     // Busca despesas no período vinculadas a viagens
     const viagemIds = viagens.map(v => v.id);
     const { data: despesas } = await supabase
@@ -261,7 +272,11 @@ export function usePagamentos() {
     let ciclosAtualizados = 0;
 
     for (const [, grupo] of grupos) {
-      const totalFaturado = grupo.viagens.reduce((sum, v) => sum + Number(v.valor_frete || 0), 0);
+      // Faturamento = valor_diaria do caminhão × número de viagens (igual ao Dashboard)
+      const totalFaturado = grupo.viagens.reduce((sum, v) => {
+        const diaria = valorDiariaPorCaminhao[v.caminhao_id as string] || 0;
+        return sum + diaria;
+      }, 0);
       const totalDespesas = grupo.viagens.reduce((sum, v) => sum + (despesasPorViagem[v.id] || 0), 0);
       const lucroTotal = totalFaturado - totalDespesas;
       const valorMotorista = (lucroTotal * porcentagemMotorista) / 100;
