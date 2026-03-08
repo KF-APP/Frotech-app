@@ -57,6 +57,7 @@ export interface Viagem {
   status: StatusViagem;
   origem?: string;
   destino?: string;
+  valorFrete?: number; // valor do frete/viagem para cálculo de pagamento
 }
 
 export type TipoDespesa = 'combustivel' | 'pedagio' | 'alimentacao' | 'manutencao' | 'pneu' | 'seguro' | 'licenciamento' | 'ipva' | 'revisao' | 'outros';
@@ -88,4 +89,42 @@ export interface DashboardStats {
 export interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+}
+
+// --- Pagamentos ---
+
+export interface ConfigPagamento {
+  id: string;
+  adminId: string;
+  porcentagemMotorista: number;
+  porcentagemAdministrador: number;
+  criadoEm: string;
+  atualizadoEm: string;
+}
+
+export type StatusPagamento = 'pendente' | 'pago';
+
+export interface CicloPagamento {
+  id: string;
+  adminId: string;
+  motoristaId: string;
+  motoristaNome: string;
+  caminhaoId?: string;
+  caminhaoPlaca?: string;
+  semanaInicio: string;
+  semanaFim: string;
+  dataPagamento: string;
+  totalViagens: number;
+  totalFaturado: number;
+  totalDespesas: number;
+  lucroTotal: number;
+  porcentagemMotorista: number;
+  porcentagemAdministrador: number;
+  valorMotorista: number;
+  valorAdministrador: number;
+  status: StatusPagamento;
+  dataConfirmacaoPagamento?: string;
+  observacoes?: string;
+  criadoEm: string;
+  atualizadoEm: string;
 }

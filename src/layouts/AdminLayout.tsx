@@ -17,6 +17,7 @@ import {
   Bell,
   UserCog,
   Activity,
+  DollarSign,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -28,6 +29,7 @@ const navItems = [
   { to: '/admin/motoristas', label: 'Motoristas', icon: Users },
   { to: '/admin/viagens', label: 'Viagens', icon: Route },
   { to: '/admin/despesas', label: 'Despesas', icon: Receipt },
+  { to: '/admin/pagamentos', label: 'Pagamentos', icon: DollarSign },
   { to: '/admin/relatorios', label: 'Relatórios', icon: BarChart3 },
   { to: '/admin/admins', label: 'Administradores', icon: UserCog },
 ];

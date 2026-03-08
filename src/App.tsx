@@ -10,6 +10,7 @@ import Viagens from './pages/admin/Viagens';
 import Despesas from './pages/admin/Despesas';
 import Relatorios from './pages/admin/Relatorios';
 import Admins from './pages/admin/Admins';
+import Pagamentos from './pages/admin/Pagamentos';
 import Monitoramento from './pages/admin/Monitoramento';
 import CadastroAdmin from './pages/CadastroAdmin';
 import AppMotorista from './pages/motorista/AppMotorista';
@@ -60,6 +61,7 @@ function AppRoutes() {
         <Route path="motoristas" element={<Motoristas />} />
         <Route path="viagens" element={<Viagens />} />
         <Route path="despesas" element={<Despesas />} />
+        <Route path="pagamentos" element={<Pagamentos />} />
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="admins" element={<Admins />} />
       </Route>

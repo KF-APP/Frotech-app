@@ -28,7 +28,14 @@
 ### Rotas
 - `/login` — tela de login
 - `/admin` — dashboard admin
-- `/admin/caminhoes`, `/admin/motoristas`, `/admin/viagens`, `/admin/despesas`, `/admin/relatorios`
+- `/admin/caminhoes`, `/admin/motoristas`, `/admin/viagens`, `/admin/despesas`, `/admin/pagamentos`, `/admin/relatorios`
 - `/motorista` — app do motorista
 
 ### Tema: Sky (azul escuro na sidebar, azul como primary)
+
+### Funcionalidade de Pagamentos (adicionada em 08/03/2026)
+- `src/pages/admin/Pagamentos.tsx` — aba de pagamentos com dashboard financeiro, ciclos semanais, histórico
+- `src/hooks/usePagamentos.ts` — hook com CRUD de config_pagamentos e ciclos_pagamento
+- Tabelas Supabase: `config_pagamentos`, `ciclos_pagamento`; coluna `valor_frete` em `viagens`
+- Lógica: semanas de sábado a sexta, pagamento na sexta-feira, divisão configurável por porcentagem
+- Migration: `supabase/migrations/20260308105045_pagamentos.sql` (aplicada via supabase db push)
