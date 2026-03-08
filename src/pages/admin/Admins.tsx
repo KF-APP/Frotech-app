@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,7 +35,6 @@ import {
   Truck,
   Users,
 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
@@ -120,7 +120,7 @@ export default function Admins() {
 
     setSalvando(true);
 
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: form.email,
       password: form.senha,
       email_confirm: true,
@@ -155,7 +155,7 @@ export default function Admins() {
       return;
     }
 
-    const { error } = await supabase.auth.admin.deleteUser(adminParaExcluir.id);
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(adminParaExcluir.id);
     if (error) {
       toast.error('Erro ao excluir administrador');
     } else {

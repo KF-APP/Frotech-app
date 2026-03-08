@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { supabase } from '../lib/supabase';
+import { supabase, supabaseAdmin } from '../lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -86,22 +86,22 @@ export default function CadastroAdmin() {
     setLoading(true);
 
     try {
-      // 2. Criar conta via signUp (funciona no frontend)
-      const { data, error } = await supabase.auth.signUp({
+      // 2. Criar conta via admin API (sem enviar email de confirmação)
+      const { data, error } = await supabaseAdmin.auth.admin.createUser({
         email: form.email.trim(),
         password: form.senha,
-        options: {
-          data: {
-            nome: form.nome.trim(),
-            tipo: 'admin',
-          },
+        email_confirm: true,
+        user_metadata: {
+          nome: form.nome.trim(),
+          tipo: 'admin',
         },
       });
 
       if (error) {
         if (
           error.message?.toLowerCase().includes('already') ||
-          error.message?.toLowerCase().includes('registered')
+          error.message?.toLowerCase().includes('registered') ||
+          error.message?.toLowerCase().includes('duplicate')
         ) {
           setErro('Já existe uma conta com este email.');
         } else {
@@ -117,9 +117,7 @@ export default function CadastroAdmin() {
         return;
       }
 
-      // 3. Garantir que o profile foi criado com tipo 'admin'
-      //    O trigger handle_new_user já faz isso automaticamente,
-      //    mas fazemos upsert para garantir caso o trigger falhe.
+      // 3. Criar o profile com tipo 'admin'
       await supabase.from('profiles').upsert({
         id: data.user.id,
         nome: form.nome.trim(),

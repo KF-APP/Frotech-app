@@ -10,10 +10,24 @@ const supabaseUrl = rawUrl?.startsWith('http')
 
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
 
+// A VITE_SUPABASE_URL na verdade contém a service role key
+// Usamos ela para operações admin (criar usuários sem email de confirmação)
+const serviceRoleKey = rawUrl?.startsWith('http')
+  ? (import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY as string)
+  : rawUrl;
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
+  },
+});
+
+// Cliente admin para operações que requerem service role (ex: criar usuário sem email)
+export const supabaseAdmin = createClient<Database>(supabaseUrl, serviceRoleKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false,
   },
 });

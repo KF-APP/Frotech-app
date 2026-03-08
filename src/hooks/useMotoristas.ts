@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseAdmin } from '@/lib/supabase';
 import { toast } from 'sonner';
 import type { Motorista } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
@@ -52,8 +52,8 @@ export function useMotoristas() {
   }) => {
     if (!user) return { success: false };
 
-    // Cria o usuário auth
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    // Cria o usuário auth via admin API (sem email de confirmação)
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: dados.email,
       password: dados.senha,
       email_confirm: true,
@@ -127,7 +127,7 @@ export function useMotoristas() {
     }
 
     if (mot?.user_id) {
-      await supabase.auth.admin.deleteUser(mot.user_id);
+      await supabaseAdmin.auth.admin.deleteUser(mot.user_id);
     }
 
     toast.success('Motorista removido!');
