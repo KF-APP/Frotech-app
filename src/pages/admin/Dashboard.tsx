@@ -173,126 +173,113 @@ export default function Dashboard() {
         <p className="text-muted-foreground text-sm mt-1">Visão geral da operação da frota</p>
       </div>
 
-      {/* Filtro de Período */}
-      <Card>
-        <CardContent className="pt-4 pb-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="flex items-center gap-2 shrink-0">
-              <Calendar className="w-4 h-4 text-primary" />
-              <span className="text-sm font-medium">Período</span>
-            </div>
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">De</span>
-                <Input
-                  type="date"
-                  value={dataInicio}
-                  onChange={e => { setDataInicio(e.target.value); setFiltroAtivo(true); }}
-                  className="h-8 text-sm w-36"
-                />
-              </div>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-muted-foreground">Até</span>
-                <Input
-                  type="date"
-                  value={dataFim}
-                  onChange={e => { setDataFim(e.target.value); setFiltroAtivo(true); }}
-                  className="h-8 text-sm w-36"
-                />
-              </div>
-            </div>
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  const hoje = new Date();
-                  setDataInicio(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10));
-                  setDataFim(hoje.toISOString().slice(0, 10));
-                  setFiltroAtivo(true);
-                }}
-                className="h-8 text-xs"
-              >
-                Este mês
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  const hoje = new Date();
-                  const inicioSemana = new Date(hoje);
-                  inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-                  setDataInicio(inicioSemana.toISOString().slice(0, 10));
-                  setDataFim(hoje.toISOString().slice(0, 10));
-                  setFiltroAtivo(true);
-                }}
-                className="h-8 text-xs"
-              >
-                Esta semana
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={aplicarTodoHistorico}
-                className={cn("h-8 text-xs", !filtroAtivo && "border-primary text-primary")}
-              >
-                Todo histórico
-              </Button>
-              {(filtroAtivo || temFiltroExtra) && (
-                <Button size="sm" variant="ghost" onClick={limparFiltro} className="h-8 text-xs text-muted-foreground">
-                  <X className="w-3 h-3 mr-1" />
-                  Limpar
-                </Button>
-              )}
-            </div>
-          </div>
+      {/* Filtros — barra slim */}
+      <div className="flex flex-wrap items-center gap-2 bg-card border border-border rounded-xl px-4 py-2.5">
+        {/* Período: atalhos */}
+        <div className="flex items-center gap-1">
+          <Button
+            size="sm"
+            variant={filtroAtivo && dataInicio === getDefaultPeriod().inicio ? 'secondary' : 'ghost'}
+            onClick={() => {
+              const hoje = new Date();
+              setDataInicio(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10));
+              setDataFim(hoje.toISOString().slice(0, 10));
+              setFiltroAtivo(true);
+            }}
+            className="h-7 text-xs px-2.5"
+          >
+            Este mês
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              const hoje = new Date();
+              const inicioSemana = new Date(hoje);
+              inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+              setDataInicio(inicioSemana.toISOString().slice(0, 10));
+              setDataFim(hoje.toISOString().slice(0, 10));
+              setFiltroAtivo(true);
+            }}
+            className="h-7 text-xs px-2.5"
+          >
+            Esta semana
+          </Button>
+          <Button
+            size="sm"
+            variant={!filtroAtivo ? 'secondary' : 'ghost'}
+            onClick={aplicarTodoHistorico}
+            className="h-7 text-xs px-2.5"
+          >
+            Tudo
+          </Button>
+        </div>
 
-          {/* Filtros de caminhão e motorista */}
-          <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-border">
-            <div className="flex items-center gap-2 shrink-0">
-              <Truck className="w-4 h-4 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground font-medium">Filtrar por:</span>
-            </div>
-            <Select value={filtroCaminhao} onValueChange={setFiltroCaminhao}>
-              <SelectTrigger className="h-8 text-xs w-44">
-                <SelectValue placeholder="Todos os caminhões" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os caminhões</SelectItem>
-                {caminhoes.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.placa} — {c.modelo}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filtroMotorista} onValueChange={setFiltroMotorista}>
-              <SelectTrigger className="h-8 text-xs w-44">
-                <SelectValue placeholder="Todos os motoristas" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos os motoristas</SelectItem>
-                {motoristas.map(m => (
-                  <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {temFiltroExtra && (
-              <span className="text-xs text-primary font-medium self-center">Filtro ativo</span>
-            )}
-          </div>
+        <div className="w-px h-5 bg-border mx-1" />
 
-          {filtroAtivo && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Exibindo dados de <strong>{new Date(dataInicio + 'T00:00:00').toLocaleDateString('pt-BR')}</strong> até <strong>{new Date(dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>
-              {' '}— {viagensFiltradas.length} viagem(ns) e {despesasFiltradas.length} despesa(s)
-            </p>
-          )}
-          {!filtroAtivo && (
-            <p className="text-xs text-muted-foreground mt-2">
-              Exibindo <strong>todo o histórico</strong> — {viagensFiltradas.length} viagem(ns) e {despesasFiltradas.length} despesa(s)
-            </p>
-          )}
-        </CardContent>
-      </Card>
+        {/* Datas personalizadas */}
+        <div className="flex items-center gap-1.5">
+          <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <Input
+            type="date"
+            value={dataInicio}
+            onChange={e => { setDataInicio(e.target.value); setFiltroAtivo(true); }}
+            className="h-7 text-xs w-32 px-2"
+          />
+          <span className="text-muted-foreground text-xs">→</span>
+          <Input
+            type="date"
+            value={dataFim}
+            onChange={e => { setDataFim(e.target.value); setFiltroAtivo(true); }}
+            className="h-7 text-xs w-32 px-2"
+          />
+        </div>
+
+        <div className="w-px h-5 bg-border mx-1" />
+
+        {/* Selects de caminhão e motorista */}
+        <Select value={filtroCaminhao} onValueChange={setFiltroCaminhao}>
+          <SelectTrigger className="h-7 text-xs w-40 px-2">
+            <Truck className="w-3 h-3 mr-1.5 text-muted-foreground shrink-0" />
+            <SelectValue placeholder="Caminhão" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os caminhões</SelectItem>
+            {caminhoes.map(c => (
+              <SelectItem key={c.id} value={c.id}>{c.placa}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={filtroMotorista} onValueChange={setFiltroMotorista}>
+          <SelectTrigger className="h-7 text-xs w-40 px-2">
+            <Route className="w-3 h-3 mr-1.5 text-muted-foreground shrink-0" />
+            <SelectValue placeholder="Motorista" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os motoristas</SelectItem>
+            {motoristas.map(m => (
+              <SelectItem key={m.id} value={m.id}>{m.nome.split(' ')[0]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {/* Limpar */}
+        {(filtroAtivo || temFiltroExtra) && (
+          <>
+            <div className="w-px h-5 bg-border mx-1" />
+            <Button size="sm" variant="ghost" onClick={limparFiltro} className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground">
+              <X className="w-3 h-3 mr-1" />
+              Limpar
+            </Button>
+          </>
+        )}
+
+        {/* Contagem slim */}
+        <span className="ml-auto text-xs text-muted-foreground hidden sm:block">
+          {viagensFiltradas.length} viag. · {despesasFiltradas.length} desp.
+        </span>
+      </div>
 
       {/* Alerta viagens em andamento */}
       {viagensEmAndamento.length > 0 && (
