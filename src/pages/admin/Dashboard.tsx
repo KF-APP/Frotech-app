@@ -19,6 +19,13 @@ import {
   Line,
 } from 'recharts';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Truck,
   Route,
   DollarSign,
@@ -32,6 +39,7 @@ import {
   ArrowDownRight,
   Calendar,
   X,
+  User,
 } from 'lucide-react';
 import { formatarMoeda, formatarKm, formatarTempo } from '../../utils/formatters';
 import { useViagens } from '@/hooks/useViagens';
@@ -61,25 +69,40 @@ export default function Dashboard() {
   const [dataInicio, setDataInicio] = useState(defaultPeriod.inicio);
   const [dataFim, setDataFim] = useState(defaultPeriod.fim);
   const [filtroAtivo, setFiltroAtivo] = useState(true);
+  const [filtroCaminhao, setFiltroCaminhao] = useState('todos');
+  const [filtroMotorista, setFiltroMotorista] = useState('todos');
 
   const loading = loadingViagens || loadingDespesas || loadingMotoristas || loadingCaminhoes;
 
-  // Filtrar por período
+  // Filtrar por período + caminhão + motorista
   const viagensFiltradas = useMemo(() => {
-    if (!filtroAtivo) return viagens;
     return viagens.filter(v => {
       const data = v.dataInicio.slice(0, 10);
-      return data >= dataInicio && data <= dataFim;
+      const matchPeriodo = !filtroAtivo || (data >= dataInicio && data <= dataFim);
+      const matchCaminhao = filtroCaminhao === 'todos' || v.caminhaoId === filtroCaminhao;
+      const matchMotorista = filtroMotorista === 'todos' || v.motoristaId === filtroMotorista;
+      return matchPeriodo && matchCaminhao && matchMotorista;
     });
-  }, [viagens, dataInicio, dataFim, filtroAtivo]);
+  }, [viagens, dataInicio, dataFim, filtroAtivo, filtroCaminhao, filtroMotorista]);
 
   const despesasFiltradas = useMemo(() => {
-    if (!filtroAtivo) return despesas;
     return despesas.filter(d => {
       const data = d.data.slice(0, 10);
-      return data >= dataInicio && data <= dataFim;
+      const matchPeriodo = !filtroAtivo || (data >= dataInicio && data <= dataFim);
+      const matchCaminhao = filtroCaminhao === 'todos' || d.caminhaoId === filtroCaminhao;
+      // despesa de motorista: verificar via viagem associada
+      const matchMotorista = filtroMotorista === 'todos' || (() => {
+        if (d.viagemId) {
+          const viagem = viagens.find(v => v.id === d.viagemId);
+          return viagem?.motoristaId === filtroMotorista;
+        }
+        // sem viagem: verificar se o motorista tem o caminhão desta despesa
+        const mot = motoristas.find(m => m.id === filtroMotorista);
+        return mot?.caminhaoId === d.caminhaoId;
+      })();
+      return matchPeriodo && matchCaminhao && matchMotorista;
     });
-  }, [despesas, dataInicio, dataFim, filtroAtivo]);
+  }, [despesas, dataInicio, dataFim, filtroAtivo, filtroCaminhao, filtroMotorista, viagens, motoristas]);
 
   const viagensEmAndamento = viagens.filter(v => v.status === 'em_andamento');
   const viagensConcluidas = viagensFiltradas.filter(v => v.status === 'concluida');
@@ -113,11 +136,15 @@ export default function Dashboard() {
     { name: 'Outros', value: despesasFiltradas.filter(d => ['seguro', 'licenciamento', 'ipva', 'outros'].includes(d.tipoDespesa)).reduce((a, d) => a + d.valor, 0), fill: 'var(--color-chart-5)' },
   ].filter(d => d.value > 0);
 
+  const temFiltroExtra = filtroCaminhao !== 'todos' || filtroMotorista !== 'todos';
+
   const limparFiltro = () => {
     const p = getDefaultPeriod();
     setDataInicio(p.inicio);
     setDataFim(p.fim);
     setFiltroAtivo(true);
+    setFiltroCaminhao('todos');
+    setFiltroMotorista('todos');
   };
 
   const aplicarTodoHistorico = () => {
@@ -212,7 +239,7 @@ export default function Dashboard() {
               >
                 Todo histórico
               </Button>
-              {filtroAtivo && (
+              {(filtroAtivo || temFiltroExtra) && (
                 <Button size="sm" variant="ghost" onClick={limparFiltro} className="h-8 text-xs text-muted-foreground">
                   <X className="w-3 h-3 mr-1" />
                   Limpar
@@ -220,10 +247,44 @@ export default function Dashboard() {
               )}
             </div>
           </div>
+
+          {/* Filtros de caminhão e motorista */}
+          <div className="flex flex-wrap gap-3 mt-3 pt-3 border-t border-border">
+            <div className="flex items-center gap-2 shrink-0">
+              <Truck className="w-4 h-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground font-medium">Filtrar por:</span>
+            </div>
+            <Select value={filtroCaminhao} onValueChange={setFiltroCaminhao}>
+              <SelectTrigger className="h-8 text-xs w-44">
+                <SelectValue placeholder="Todos os caminhões" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os caminhões</SelectItem>
+                {caminhoes.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.placa} — {c.modelo}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={filtroMotorista} onValueChange={setFiltroMotorista}>
+              <SelectTrigger className="h-8 text-xs w-44">
+                <SelectValue placeholder="Todos os motoristas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os motoristas</SelectItem>
+                {motoristas.map(m => (
+                  <SelectItem key={m.id} value={m.id}>{m.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {temFiltroExtra && (
+              <span className="text-xs text-primary font-medium self-center">Filtro ativo</span>
+            )}
+          </div>
+
           {filtroAtivo && (
             <p className="text-xs text-muted-foreground mt-2">
               Exibindo dados de <strong>{new Date(dataInicio + 'T00:00:00').toLocaleDateString('pt-BR')}</strong> até <strong>{new Date(dataFim + 'T00:00:00').toLocaleDateString('pt-BR')}</strong>
-              {' '}�� {viagensFiltradas.length} viagem(ns) e {despesasFiltradas.length} despesa(s)
+              {' '}— {viagensFiltradas.length} viagem(ns) e {despesasFiltradas.length} despesa(s)
             </p>
           )}
           {!filtroAtivo && (
