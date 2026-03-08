@@ -194,6 +194,7 @@ export default function AppMotorista() {
   // ── VERIFICAR VIAGEM ATIVA AO CARREGAR ──
   useEffect(() => {
     if (!motoristaId) return;
+    const mId = motoristaId;
 
     async function verificarViagemAtiva() {
       setVerificandoViagem(true);
@@ -202,7 +203,7 @@ export default function AppMotorista() {
         const { data } = await supabase
           .from('viagens')
           .select('*')
-          .eq('motorista_id', motoristaId)
+          .eq('motorista_id', mId)
           .eq('status', 'em_andamento')
           .order('data_inicio', { ascending: false })
           .limit(1)
