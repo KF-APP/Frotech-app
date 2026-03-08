@@ -35,7 +35,6 @@ import {
   Navigation,
   CheckCircle,
   AlertCircle,
-  Camera,
   History,
   Truck,
   ImagePlus,

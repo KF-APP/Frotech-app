@@ -328,6 +328,44 @@ export default function Despesas() {
                 </SelectContent>
               </Select>
             </div>
+            {/* Upload comprovante */}
+            <div className="space-y-2">
+              <Label>Comprovante (opcional)</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  if (!file) return;
+                  setComprovanteFile(file);
+                  setComprovantePreview(URL.createObjectURL(file));
+                }}
+              />
+              {comprovantePreview ? (
+                <div className="relative rounded-lg overflow-hidden border border-border">
+                  <img src={comprovantePreview} alt="Comprovante" className="w-full h-32 object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setComprovanteFile(null);
+                      if (comprovantePreview) URL.revokeObjectURL(comprovantePreview);
+                      setComprovantePreview(null);
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                    className="absolute top-2 right-2 bg-background/80 rounded-full p-1 hover:bg-background"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <Button type="button" variant="outline" className="w-full" onClick={() => fileInputRef.current?.click()}>
+                  <ImagePlus className="w-4 h-4 mr-2" />
+                  Anexar foto do comprovante
+                </Button>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
