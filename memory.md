@@ -36,6 +36,9 @@
 ### Funcionalidade de Pagamentos (adicionada em 08/03/2026)
 - `src/pages/admin/Pagamentos.tsx` — aba de pagamentos com dashboard financeiro, ciclos semanais, histórico
 - `src/hooks/usePagamentos.ts` — hook com CRUD de config_pagamentos e ciclos_pagamento
-- Tabelas Supabase: `config_pagamentos`, `ciclos_pagamento`; coluna `valor_frete` em `viagens`
+- `src/types/index.ts` — tipos ConfigPagamento, CicloPagamento, StatusPagamento adicionados
+- Tabelas Supabase criadas e verificadas: `config_pagamentos`, `ciclos_pagamento`; coluna `valor_frete` em `viagens`
 - Lógica: semanas de sábado a sexta, pagamento na sexta-feira, divisão configurável por porcentagem
-- Migration: `supabase/migrations/20260308105045_pagamentos.sql` (aplicada via supabase db push)
+- Migration: `supabase/migrations/20260308105045_pagamentos.sql` (executada via management API)
+- Para exec SQL direto: usar env.SUPABASE_ACCESS_TOKEN (sbp_...) com /v1/projects/{ref}/database/query
+- TypeScript: zero erros confirmados
