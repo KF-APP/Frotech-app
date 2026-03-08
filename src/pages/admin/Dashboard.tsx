@@ -39,7 +39,6 @@ import {
   ArrowDownRight,
   Calendar,
   X,
-  User,
 } from 'lucide-react';
 import { formatarMoeda, formatarKm, formatarTempo } from '../../utils/formatters';
 import { useViagens } from '@/hooks/useViagens';
