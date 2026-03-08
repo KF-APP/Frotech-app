@@ -38,6 +38,8 @@ import {
   Camera,
   History,
   Truck,
+  ImagePlus,
+  X,
 } from 'lucide-react';
 import type { PontoGPS, TipoDespesa } from '../../types';
 import { formatarTempo, formatarData, formatarKm } from '../../utils/formatters';
@@ -54,6 +56,8 @@ interface DespesaLocal {
   valor: number;
   descricao: string;
   data: string;
+  comprovanteFile?: File | null;
+  comprovantePreview?: string | null;
 }
 
 function calcularDistancia(p1: PontoGPS, p2: PontoGPS): number {
@@ -94,6 +98,9 @@ export default function AppMotorista() {
     valor: '',
     descricao: '',
   });
+  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
+  const [comprovantePreview, setComprovantePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Get motorista data to find caminhao
   const [motoristaData, setMotoristaData] = useState<{ nome: string; caminhao_id: string | null; caminhao_placa: string | null } | null>(null);
@@ -239,7 +246,7 @@ export default function AppMotorista() {
       tempoTotal: tempoDecorrido,
     });
 
-    // Save all local despesas to database
+    // Save all local despesas to database (including comprovante photos)
     for (const d of despesas) {
       await criarDespesa({
         tipoDespesa: d.tipoDespesa,
@@ -249,6 +256,7 @@ export default function AppMotorista() {
         caminhaoId: motoristaData?.caminhao_id || undefined,
         viagemId: viagemAtivaId,
         criadoPor: 'motorista',
+        comprovanteFile: d.comprovanteFile || null,
       });
     }
 
@@ -260,6 +268,21 @@ export default function AppMotorista() {
 
     toast.success(`Viagem salva! ${kmFinal.toFixed(1)} km percorridos em ${formatarTempo(tempoDecorrido)}`);
     setTela('home');
+  };
+
+  const handleComprovanteChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (!file) return;
+    setComprovanteFile(file);
+    const url = URL.createObjectURL(file);
+    setComprovantePreview(url);
+  };
+
+  const removerComprovante = () => {
+    setComprovanteFile(null);
+    if (comprovantePreview) URL.revokeObjectURL(comprovantePreview);
+    setComprovantePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const adicionarDespesa = () => {
@@ -274,12 +297,17 @@ export default function AppMotorista() {
       valor: Number(formDespesa.valor),
       descricao: formDespesa.descricao,
       data: new Date().toISOString(),
+      comprovanteFile: comprovanteFile,
+      comprovantePreview: comprovantePreview,
     };
 
     setDespesas(prev => [...prev, nova]);
     toast.success('Despesa registrada! Será salva ao encerrar a viagem.');
     setDialogDespesa(false);
     setFormDespesa({ tipoDespesa: '', valor: '', descricao: '' });
+    setComprovanteFile(null);
+    setComprovantePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleLogout = () => {
@@ -618,10 +646,46 @@ export default function AppMotorista() {
                 rows={2}
               />
             </div>
-            <Button variant="outline" className="w-full" onClick={() => toast.info('Foto do comprovante em breve')}>
-              <Camera className="w-4 h-4 mr-2" />
-              Tirar foto do comprovante
-            </Button>
+            {/* Upload de comprovante */}
+            <div className="space-y-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={handleComprovanteChange}
+              />
+              {comprovantePreview ? (
+                <div className="relative rounded-lg overflow-hidden border border-border">
+                  <img
+                    src={comprovantePreview}
+                    alt="Comprovante"
+                    className="w-full h-36 object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={removerComprovante}
+                    className="absolute top-2 right-2 bg-background/80 rounded-full p-1 hover:bg-background"
+                  >
+                    <X className="w-4 h-4 text-foreground" />
+                  </button>
+                  <div className="absolute bottom-0 left-0 right-0 bg-background/70 text-xs text-center py-1 text-foreground">
+                    Comprovante adicionado
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus className="w-4 h-4 mr-2" />
+                  Foto do comprovante (opcional)
+                </Button>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogDespesa(false)}>Cancelar</Button>

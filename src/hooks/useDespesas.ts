@@ -50,6 +50,23 @@ export function useDespesas(viagemId?: string) {
     fetchDespesas();
   }, [fetchDespesas]);
 
+  const uploadComprovante = async (file: File, userId: string): Promise<string | null> => {
+    const ext = file.name.split('.').pop() || 'jpg';
+    const path = `${userId}/${Date.now()}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from('comprovantes')
+      .upload(path, file, { upsert: false, contentType: file.type });
+
+    if (error) {
+      toast.error('Erro ao enviar foto do comprovante');
+      return null;
+    }
+
+    const { data } = supabase.storage.from('comprovantes').getPublicUrl(path);
+    return data.publicUrl;
+  };
+
   const criarDespesa = async (dados: {
     tipoDespesa: TipoDespesa;
     valor: number;
@@ -59,8 +76,14 @@ export function useDespesas(viagemId?: string) {
     viagemId?: string;
     criadoPor: 'motorista' | 'admin';
     adminId?: string;
+    comprovanteFile?: File | null;
   }) => {
     if (!user) return { success: false };
+
+    let comprovanteUrl: string | null = null;
+    if (dados.comprovanteFile) {
+      comprovanteUrl = await uploadComprovante(dados.comprovanteFile, user.id);
+    }
 
     const { error } = await supabase.from('despesas').insert({
       tipo_despesa: dados.tipoDespesa,
@@ -73,6 +96,7 @@ export function useDespesas(viagemId?: string) {
       criado_por_id: user.id,
       criado_por_nome: user.nome,
       admin_id: dados.adminId || user.id,
+      comprovante_url: comprovanteUrl,
     });
 
     if (error) {

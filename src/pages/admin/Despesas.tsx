@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Receipt, Plus, Search, Truck, Calendar, User, Filter, Trash2, Upload } from 'lucide-react';
+import { Receipt, Plus, Search, Truck, Calendar, User, Filter, Trash2, Upload, ImagePlus, X } from 'lucide-react';
 import type { TipoDespesa } from '../../types';
 import { formatarMoeda, formatarData, labelTipoDespesa } from '../../utils/formatters';
 import { useDespesas } from '@/hooks/useDespesas';
@@ -60,6 +60,9 @@ export default function Despesas() {
     caminhaoId: '',
     viagemId: '',
   });
+  const [comprovanteFile, setComprovanteFile] = useState<File | null>(null);
+  const [comprovantePreview, setComprovantePreview] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtradas = despesas.filter(d => {
     const matchBusca = d.descricao.toLowerCase().includes(busca.toLowerCase()) ||
@@ -82,11 +85,16 @@ export default function Despesas() {
       caminhaoId: form.caminhaoId,
       viagemId: form.viagemId || undefined,
       criadoPor: 'admin',
+      comprovanteFile: comprovanteFile,
     });
 
     setSalvando(false);
     setDialogOpen(false);
     setForm({ tipoDespesa: '', valor: '', descricao: '', data: new Date().toISOString().split('T')[0], caminhaoId: '', viagemId: '' });
+    setComprovanteFile(null);
+    if (comprovantePreview) URL.revokeObjectURL(comprovantePreview);
+    setComprovantePreview(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const excluir = async (id: string) => {
@@ -209,10 +217,16 @@ export default function Despesas() {
                   <div className="text-right">
                     <p className="font-bold">{formatarMoeda(d.valor)}</p>
                     {d.comprovanteUrl && (
-                      <p className="text-xs text-primary flex items-center gap-1 justify-end">
+                      <a
+                        href={d.comprovanteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary flex items-center gap-1 justify-end hover:underline"
+                        onClick={e => e.stopPropagation()}
+                      >
                         <Upload className="w-3 h-3" />
-                        Comprovante
-                      </p>
+                        Ver comprovante
+                      </a>
                     )}
                   </div>
                   <button
