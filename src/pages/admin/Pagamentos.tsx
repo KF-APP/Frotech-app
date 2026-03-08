@@ -68,16 +68,14 @@ function IndicadorCard({
   return (
     <Card>
       <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-muted-foreground truncate">{titulo}</p>
-            <p className="text-2xl font-bold mt-1 text-foreground">{valor}</p>
-            {subtitulo && <p className="text-xs text-muted-foreground mt-1">{subtitulo}</p>}
-          </div>
-          <div className={`p-2.5 rounded-lg ${corIcon} shrink-0 ml-3`}>
-            <Icon className="w-5 h-5 text-primary-foreground" />
+        <div className="flex items-start justify-between mb-3">
+          <p className="text-sm text-muted-foreground truncate">{titulo}</p>
+          <div className={`p-2 rounded-lg ${corIcon} shrink-0 ml-2`}>
+            <Icon className="w-4 h-4 text-primary-foreground" />
           </div>
         </div>
+        <p className="text-2xl font-bold text-foreground">{valor}</p>
+        {subtitulo && <p className="text-xs text-muted-foreground mt-1">{subtitulo}</p>}
       </CardContent>
     </Card>
   );
