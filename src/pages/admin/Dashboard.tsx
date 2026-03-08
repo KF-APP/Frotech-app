@@ -135,7 +135,7 @@ export default function Dashboard() {
     { name: 'Outros', value: despesasFiltradas.filter(d => ['seguro', 'licenciamento', 'ipva', 'outros'].includes(d.tipoDespesa)).reduce((a, d) => a + d.valor, 0), fill: 'var(--color-chart-5)' },
   ].filter(d => d.value > 0);
 
-  const temFiltroExtra = filtroCaminhao !== 'todos' || filtroMotorista !== 'todos';
+  const temFiltroAtivo = filtroAtivo || filtroCaminhao !== 'todos' || filtroMotorista !== 'todos';
 
   const limparFiltro = () => {
     const p = getDefaultPeriod();
@@ -144,10 +144,6 @@ export default function Dashboard() {
     setFiltroAtivo(true);
     setFiltroCaminhao('todos');
     setFiltroMotorista('todos');
-  };
-
-  const aplicarTodoHistorico = () => {
-    setFiltroAtivo(false);
   };
 
   if (loading) {
@@ -173,85 +169,41 @@ export default function Dashboard() {
         <p className="text-muted-foreground text-sm mt-1">Visão geral da operação da frota</p>
       </div>
 
-      {/* Filtros — 2 linhas slim */}
-      <div className="bg-card border border-border rounded-xl px-4 py-2.5 space-y-2">
-        {/* Linha 1: período + limpar */}
+      {/* Filtros — barra compacta 2 linhas */}
+      <div className="bg-card border border-border rounded-xl px-3 py-2 space-y-1.5">
+        {/* Linha 1: datas + limpar + contagem */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            <Button
-              size="sm"
-              variant={filtroAtivo && dataInicio === getDefaultPeriod().inicio ? 'secondary' : 'ghost'}
-              onClick={() => {
-                const hoje = new Date();
-                setDataInicio(new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0, 10));
-                setDataFim(hoje.toISOString().slice(0, 10));
-                setFiltroAtivo(true);
-              }}
-              className="h-7 text-xs px-2.5"
-            >
-              Este mês
+          <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <Input
+            type="date"
+            value={dataInicio}
+            onChange={e => { setDataInicio(e.target.value); setFiltroAtivo(true); }}
+            className="h-7 text-xs w-[118px] px-2"
+          />
+          <span className="text-muted-foreground text-xs shrink-0">–</span>
+          <Input
+            type="date"
+            value={dataFim}
+            onChange={e => { setDataFim(e.target.value); setFiltroAtivo(true); }}
+            className="h-7 text-xs w-[118px] px-2"
+          />
+          {temFiltroAtivo && (
+            <Button size="sm" variant="ghost" onClick={limparFiltro} className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground">
+              <X className="w-3 h-3 mr-1" />
+              Limpar
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                const hoje = new Date();
-                const inicioSemana = new Date(hoje);
-                inicioSemana.setDate(hoje.getDate() - hoje.getDay());
-                setDataInicio(inicioSemana.toISOString().slice(0, 10));
-                setDataFim(hoje.toISOString().slice(0, 10));
-                setFiltroAtivo(true);
-              }}
-              className="h-7 text-xs px-2.5"
-            >
-              Esta semana
-            </Button>
-            <Button
-              size="sm"
-              variant={!filtroAtivo ? 'secondary' : 'ghost'}
-              onClick={aplicarTodoHistorico}
-              className="h-7 text-xs px-2.5"
-            >
-              Tudo
-            </Button>
-          </div>
-          <div className="w-px h-5 bg-border" />
-          <div className="flex items-center gap-1.5">
-            <Calendar className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            <Input
-              type="date"
-              value={dataInicio}
-              onChange={e => { setDataInicio(e.target.value); setFiltroAtivo(true); }}
-              className="h-7 text-xs w-32 px-2"
-            />
-            <span className="text-muted-foreground text-xs">→</span>
-            <Input
-              type="date"
-              value={dataFim}
-              onChange={e => { setDataFim(e.target.value); setFiltroAtivo(true); }}
-              className="h-7 text-xs w-32 px-2"
-            />
-          </div>
-          {(filtroAtivo || temFiltroExtra) && (
-            <>
-              <div className="w-px h-5 bg-border" />
-              <Button size="sm" variant="ghost" onClick={limparFiltro} className="h-7 text-xs px-2 text-muted-foreground hover:text-foreground">
-                <X className="w-3 h-3 mr-1" />
-                Limpar
-              </Button>
-            </>
           )}
           <span className="ml-auto text-xs text-muted-foreground hidden sm:block">
             {viagensFiltradas.length} viag. · {despesasFiltradas.length} desp.
           </span>
         </div>
 
-        {/* Linha 2: caminhão + motorista lado a lado */}
+        {/* Linha 2: caminhão + motorista */}
         <div className="flex items-center gap-2">
           <Select value={filtroCaminhao} onValueChange={setFiltroCaminhao}>
-            <SelectTrigger className="h-7 text-xs w-48 px-2">
-              <Truck className="w-3 h-3 mr-1.5 text-muted-foreground shrink-0" />
-              <SelectValue placeholder="Todos os caminhões" />
+            <SelectTrigger className="h-7 text-xs w-48 px-2 gap-1">
+              <Truck className="w-3 h-3 text-muted-foreground shrink-0" />
+              <SelectValue placeholder="Caminhão" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os caminhões</SelectItem>
@@ -261,9 +213,9 @@ export default function Dashboard() {
             </SelectContent>
           </Select>
           <Select value={filtroMotorista} onValueChange={setFiltroMotorista}>
-            <SelectTrigger className="h-7 text-xs w-48 px-2">
-              <Route className="w-3 h-3 mr-1.5 text-muted-foreground shrink-0" />
-              <SelectValue placeholder="Todos os motoristas" />
+            <SelectTrigger className="h-7 text-xs w-44 px-2 gap-1">
+              <Route className="w-3 h-3 text-muted-foreground shrink-0" />
+              <SelectValue placeholder="Motorista" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="todos">Todos os motoristas</SelectItem>
@@ -272,9 +224,6 @@ export default function Dashboard() {
               ))}
             </SelectContent>
           </Select>
-          {temFiltroExtra && (
-            <span className="text-xs text-primary font-medium">Filtro ativo</span>
-          )}
         </div>
       </div>
 
