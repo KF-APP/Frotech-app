@@ -34,16 +34,6 @@ export default function Login() {
     setLoading(false);
   };
 
-  const preencherAdmin = () => {
-    setEmail('admin@frotatech.com');
-    setSenha('admin123');
-  };
-
-  const preencherMotorista = () => {
-    setEmail('joao@frotatech.com');
-    setSenha('moto123');
-  };
-
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
@@ -111,21 +101,6 @@ export default function Login() {
                 {loading ? 'Entrando...' : 'Entrar'}
               </Button>
             </form>
-          </CardContent>
-        </Card>
-
-        {/* Atalhos de demo */}
-        <Card>
-          <CardContent className="pt-4">
-            <p className="text-xs text-muted-foreground mb-3 text-center font-medium">Acesso rápido para demonstração</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant="outline" size="sm" onClick={preencherAdmin} className="text-xs">
-                Entrar como Admin
-              </Button>
-              <Button variant="outline" size="sm" onClick={preencherMotorista} className="text-xs">
-                Entrar como Motorista
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>

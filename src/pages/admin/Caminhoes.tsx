@@ -12,17 +12,18 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Truck, Plus, Search, TrendingDown, Route, DollarSign, Pencil, Trash2 } from 'lucide-react';
-import { mockCaminhoes as initialCaminhoes } from '../../data/mockData';
 import type { Caminhao } from '../../types';
 import { formatarMoeda, formatarKm } from '../../utils/formatters';
-import { toast } from 'sonner';
+import { useCaminhoes } from '@/hooks/useCaminhoes';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Caminhoes() {
-  const [caminhoes, setCaminhoes] = useState<Caminhao[]>(initialCaminhoes);
+  const { caminhoes, loading, criarCaminhao, atualizarCaminhao, excluirCaminhao } = useCaminhoes();
   const [busca, setBusca] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editando, setEditando] = useState<Caminhao | null>(null);
   const [form, setForm] = useState({ placa: '', modelo: '', ano: '', capacidade: '' });
+  const [salvando, setSalvando] = useState(false);
 
   const filtrados = caminhoes.filter(c =>
     c.placa.toLowerCase().includes(busca.toLowerCase()) ||
@@ -41,40 +42,47 @@ export default function Caminhoes() {
     setDialogOpen(true);
   };
 
-  const salvar = () => {
-    if (!form.placa || !form.modelo || !form.ano || !form.capacidade) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
-    }
+  const salvar = async () => {
+    if (!form.placa || !form.modelo || !form.ano || !form.capacidade) return;
+    setSalvando(true);
 
     if (editando) {
-      setCaminhoes(prev => prev.map(c => c.id === editando.id
-        ? { ...c, placa: form.placa, modelo: form.modelo, ano: Number(form.ano), capacidade: Number(form.capacidade) }
-        : c
-      ));
-      toast.success('Caminhão atualizado com sucesso!');
-    } else {
-      const novo: Caminhao = {
-        id: `cam-${Date.now()}`,
+      await atualizarCaminhao(editando.id, {
         placa: form.placa,
         modelo: form.modelo,
         ano: Number(form.ano),
         capacidade: Number(form.capacidade),
-        adminId: 'admin-1',
-        totalKm: 0,
-        totalDespesas: 0,
-        totalViagens: 0,
-      };
-      setCaminhoes(prev => [...prev, novo]);
-      toast.success('Caminhão cadastrado com sucesso!');
+      });
+    } else {
+      await criarCaminhao({
+        placa: form.placa,
+        modelo: form.modelo,
+        ano: Number(form.ano),
+        capacidade: Number(form.capacidade),
+      });
     }
+
+    setSalvando(false);
     setDialogOpen(false);
   };
 
-  const excluir = (id: string) => {
-    setCaminhoes(prev => prev.filter(c => c.id !== id));
-    toast.success('Caminhão removido');
+  const excluir = async (id: string) => {
+    await excluirCaminhao(id);
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-36" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-48 w-full rounded-xl" />)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -180,7 +188,7 @@ export default function Caminhoes() {
         })}
       </div>
 
-      {filtrados.length === 0 && (
+      {filtrados.length === 0 && !loading && (
         <div className="text-center py-12">
           <Truck className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground">Nenhum caminhão encontrado</p>
@@ -237,8 +245,8 @@ export default function Caminhoes() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={salvar}>
-              {editando ? 'Salvar alterações' : 'Cadastrar'}
+            <Button onClick={salvar} disabled={salvando}>
+              {salvando ? 'Salvando...' : editando ? 'Salvar alterações' : 'Cadastrar'}
             </Button>
           </DialogFooter>
         </DialogContent>

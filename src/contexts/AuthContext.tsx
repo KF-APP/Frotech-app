@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { supabase } from '../lib/supabase';
 import type { AuthState, UserType } from '../types';
-import { mockUsers, mockMotoristas, CREDENCIAIS_TESTE } from '../data/mockData';
 
 interface AuthContextType extends AuthState {
   login: (email: string, senha: string) => Promise<{ success: boolean; error?: string }>;
@@ -16,45 +16,86 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     isAuthenticated: false,
   });
   const [motoristaId, setMotoristaId] = useState<string | undefined>();
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Restore session on mount
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        await loadUserProfile(session.user.id);
+      }
+      setLoading(false);
+    });
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        await loadUserProfile(session.user.id);
+      } else if (event === 'SIGNED_OUT') {
+        setAuthState({ user: null, isAuthenticated: false });
+        setMotoristaId(undefined);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  async function loadUserProfile(userId: string) {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .single();
+
+    if (error || !profile) {
+      setAuthState({ user: null, isAuthenticated: false });
+      return;
+    }
+
+    const user = {
+      id: profile.id,
+      nome: profile.nome,
+      email: profile.email,
+      tipo: profile.tipo as UserType,
+      dataCriacao: profile.data_criacao,
+    };
+
+    setAuthState({ user, isAuthenticated: true });
+
+    if (profile.tipo === 'motorista') {
+      const { data: motorista } = await supabase
+        .from('motoristas')
+        .select('id')
+        .eq('user_id', userId)
+        .single();
+      setMotoristaId(motorista?.id);
+    }
+  }
 
   const login = async (email: string, senha: string): Promise<{ success: boolean; error?: string }> => {
-    // Simulação de login com dados mock
-    await new Promise(resolve => setTimeout(resolve, 800));
+    const { error } = await supabase.auth.signInWithPassword({ email, password: senha });
 
-    const user = mockUsers.find(u => u.email === email);
-
-    if (!user) {
-      return { success: false, error: 'Email não encontrado' };
+    if (error) {
+      return { success: false, error: 'Email ou senha incorretos' };
     }
 
-    // Verificar credenciais
-    if (user.tipo === 'admin' && email === CREDENCIAIS_TESTE.admin.email && senha === CREDENCIAIS_TESTE.admin.senha) {
-      setAuthState({ user, isAuthenticated: true });
-      return { success: true };
-    }
-
-    if (user.tipo === 'motorista' && senha === CREDENCIAIS_TESTE.motorista.senha) {
-      const motorista = mockMotoristas.find(m => m.userId === user.id);
-      setMotoristaId(motorista?.id);
-      setAuthState({ user, isAuthenticated: true });
-      return { success: true };
-    }
-
-    // Permitir qualquer motorista com senha padrão
-    if (user.tipo === 'motorista' && senha === 'moto123') {
-      const motorista = mockMotoristas.find(m => m.userId === user.id);
-      setMotoristaId(motorista?.id);
-      setAuthState({ user, isAuthenticated: true });
-      return { success: true };
-    }
-
-    return { success: false, error: 'Senha incorreta' };
+    return { success: true };
   };
 
-  const logout = () => {
-    setAuthState({ user: null, isAuthenticated: false });
-    setMotoristaId(undefined);
+  const logout = async () => {
+    await supabase.auth.signOut();
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{ ...authState, login, logout, motoristaId }}>

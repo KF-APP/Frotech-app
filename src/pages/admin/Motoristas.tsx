@@ -20,16 +20,19 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Users, Plus, Search, Phone, Mail, Truck, Route, TrendingDown, Pencil, Trash2 } from 'lucide-react';
-import { mockMotoristas as initialMotoristas, mockCaminhoes } from '../../data/mockData';
 import type { Motorista } from '../../types';
 import { formatarKm } from '../../utils/formatters';
-import { toast } from 'sonner';
+import { useMotoristas } from '@/hooks/useMotoristas';
+import { useCaminhoes } from '@/hooks/useCaminhoes';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Motoristas() {
-  const [motoristas, setMotoristas] = useState<Motorista[]>(initialMotoristas);
+  const { motoristas, loading, criarMotorista, atualizarMotorista, excluirMotorista } = useMotoristas();
+  const { caminhoes } = useCaminhoes();
   const [busca, setBusca] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editando, setEditando] = useState<Motorista | null>(null);
+  const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({
     nome: '',
     email: '',
@@ -55,49 +58,54 @@ export default function Motoristas() {
     setDialogOpen(true);
   };
 
-  const salvar = () => {
-    if (!form.nome || !form.email || !form.telefone) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
-    }
+  const salvar = async () => {
+    if (!form.nome || !form.email || !form.telefone) return;
+    if (!editando && !form.senha) return;
+
+    setSalvando(true);
 
     if (editando) {
-      setMotoristas(prev => prev.map(m => m.id === editando.id
-        ? { ...m, nome: form.nome, email: form.email, telefone: form.telefone, caminhaoId: form.caminhaoId || undefined }
-        : m
-      ));
-      toast.success('Motorista atualizado com sucesso!');
-    } else {
-      if (!form.senha) {
-        toast.error('Informe a senha para o motorista');
-        return;
-      }
-      const novo: Motorista = {
-        id: `mot-${Date.now()}`,
-        userId: `user-mot-${Date.now()}`,
+      await atualizarMotorista(editando.id, {
         nome: form.nome,
-        email: form.email,
         telefone: form.telefone,
         caminhaoId: form.caminhaoId || undefined,
-        kmTotal: 0,
-        totalViagens: 0,
-        custoMedioPorKm: 0,
-      };
-      setMotoristas(prev => [...prev, novo]);
-      toast.success('Motorista cadastrado com sucesso!');
+      });
+    } else {
+      await criarMotorista({
+        nome: form.nome,
+        email: form.email,
+        senha: form.senha,
+        telefone: form.telefone,
+        caminhaoId: form.caminhaoId || undefined,
+      });
     }
+
+    setSalvando(false);
     setDialogOpen(false);
   };
 
-  const excluir = (id: string) => {
-    setMotoristas(prev => prev.filter(m => m.id !== id));
-    toast.success('Motorista removido');
+  const excluir = async (id: string) => {
+    await excluirMotorista(id);
   };
 
   const getCaminhaoPlaca = (caminhaoId?: string) => {
     if (!caminhaoId) return null;
-    return mockCaminhoes.find(c => c.id === caminhaoId)?.placa;
+    return caminhoes.find(c => c.id === caminhaoId)?.placa;
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-36" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-48 w-full rounded-xl" />)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -173,7 +181,7 @@ export default function Motoristas() {
                   </div>
                   <div className="flex items-center gap-2 text-muted-foreground">
                     <Phone className="w-3.5 h-3.5" />
-                    <span className="text-xs">{mot.telefone}</span>
+                    <span className="text-xs">{mot.telefone || '—'}</span>
                   </div>
                 </div>
 
@@ -197,7 +205,7 @@ export default function Motoristas() {
                       <TrendingDown className="w-3.5 h-3.5 text-primary" />
                     </div>
                     <p className="text-xs font-bold">
-                      {mot.custoMedioPorKm > 0 ? `R$ ${mot.custoMedioPorKm.toFixed(2)}` : '-'}
+                      {mot.custoMedioPorKm > 0 ? `R$ ${mot.custoMedioPorKm.toFixed(2)}` : '—'}
                     </p>
                     <p className="text-xs text-muted-foreground">Custo/KM</p>
                   </div>
@@ -208,7 +216,7 @@ export default function Motoristas() {
         })}
       </div>
 
-      {filtrados.length === 0 && (
+      {filtrados.length === 0 && !loading && (
         <div className="text-center py-12">
           <Users className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
           <p className="text-muted-foreground">Nenhum motorista encontrado</p>
@@ -219,7 +227,6 @@ export default function Motoristas() {
         </div>
       )}
 
-      {/* Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -241,11 +248,12 @@ export default function Motoristas() {
                   type="email"
                   placeholder="joao@email.com"
                   value={form.email}
+                  disabled={!!editando}
                   onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Telefone *</Label>
+                <Label>Telefone</Label>
                 <Input
                   placeholder="(11) 98765-4321"
                   value={form.telefone}
@@ -258,22 +266,23 @@ export default function Motoristas() {
                 <Label>Senha de acesso *</Label>
                 <Input
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="Mínimo 6 caracteres"
                   value={form.senha}
                   onChange={(e) => setForm(f => ({ ...f, senha: e.target.value }))}
                 />
               </div>
             )}
             <div className="space-y-2">
-              <Label>Caminh��o associado</Label>
-              <Select value={form.caminhaoId} onValueChange={(v) => setForm(f => ({ ...f, caminhaoId: v }))}>
+              <Label>Caminhão associado</Label>
+              <Select value={form.caminhaoId || 'nenhum'} onValueChange={(v) => setForm(f => ({ ...f, caminhaoId: v === 'nenhum' ? '' : v }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecionar caminhão (opcional)" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockCaminhoes.map(c => (
+                  <SelectItem value="nenhum">Nenhum</SelectItem>
+                  {caminhoes.map(c => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.placa} - {c.modelo}
+                      {c.placa} — {c.modelo}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -282,8 +291,8 @@ export default function Motoristas() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={salvar}>
-              {editando ? 'Salvar alterações' : 'Cadastrar'}
+            <Button onClick={salvar} disabled={salvando}>
+              {salvando ? 'Salvando...' : editando ? 'Salvar alterações' : 'Cadastrar'}
             </Button>
           </DialogFooter>
         </DialogContent>

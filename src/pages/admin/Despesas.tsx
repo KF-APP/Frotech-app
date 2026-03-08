@@ -19,10 +19,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Receipt, Plus, Search, Truck, Calendar, User, Filter, Trash2, Upload } from 'lucide-react';
-import { mockDespesas as initialDespesas, mockCaminhoes, mockViagens } from '../../data/mockData';
-import type { Despesa, TipoDespesa } from '../../types';
+import type { TipoDespesa } from '../../types';
 import { formatarMoeda, formatarData, labelTipoDespesa } from '../../utils/formatters';
-import { toast } from 'sonner';
+import { useDespesas } from '@/hooks/useDespesas';
+import { useCaminhoes } from '@/hooks/useCaminhoes';
+import { useViagens } from '@/hooks/useViagens';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const TIPOS_DESPESA: TipoDespesa[] = [
   'combustivel', 'pedagio', 'alimentacao', 'manutencao',
@@ -43,10 +45,13 @@ const TIPO_CORES: Record<string, string> = {
 };
 
 export default function Despesas() {
-  const [despesas, setDespesas] = useState<Despesa[]>(initialDespesas);
+  const { despesas, loading, criarDespesa, excluirDespesa } = useDespesas();
+  const { caminhoes } = useCaminhoes();
+  const { viagens } = useViagens();
   const [busca, setBusca] = useState('');
   const [filtroTipo, setFiltroTipo] = useState('todos');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [salvando, setSalvando] = useState(false);
   const [form, setForm] = useState({
     tipoDespesa: '' as TipoDespesa | '',
     valor: '',
@@ -65,14 +70,11 @@ export default function Despesas() {
 
   const totalFiltrado = filtradas.reduce((acc, d) => acc + d.valor, 0);
 
-  const salvar = () => {
-    if (!form.tipoDespesa || !form.valor || !form.descricao || !form.data || !form.caminhaoId) {
-      toast.error('Preencha todos os campos obrigatórios');
-      return;
-    }
+  const salvar = async () => {
+    if (!form.tipoDespesa || !form.valor || !form.descricao || !form.data || !form.caminhaoId) return;
+    setSalvando(true);
 
-    const nova: Despesa = {
-      id: `desp-${Date.now()}`,
+    await criarDespesa({
       tipoDespesa: form.tipoDespesa as TipoDespesa,
       valor: Number(form.valor),
       descricao: form.descricao,
@@ -80,22 +82,32 @@ export default function Despesas() {
       caminhaoId: form.caminhaoId,
       viagemId: form.viagemId || undefined,
       criadoPor: 'admin',
-      criadoPorId: 'admin-1',
-      criadoPorNome: 'Carlos Silva',
-    };
+    });
 
-    setDespesas(prev => [nova, ...prev]);
-    toast.success('Despesa registrada com sucesso!');
+    setSalvando(false);
     setDialogOpen(false);
     setForm({ tipoDespesa: '', valor: '', descricao: '', data: new Date().toISOString().split('T')[0], caminhaoId: '', viagemId: '' });
   };
 
-  const excluir = (id: string) => {
-    setDespesas(prev => prev.filter(d => d.id !== id));
-    toast.success('Despesa removida');
+  const excluir = async (id: string) => {
+    await excluirDespesa(id);
   };
 
-  const getCaminhaoPlaca = (id?: string) => mockCaminhoes.find(c => c.id === id)?.placa || '';
+  const getCaminhaoPlaca = (id?: string) => caminhoes.find(c => c.id === id)?.placa || '';
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-10 w-36" />
+        </div>
+        <div className="space-y-3">
+          {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -278,9 +290,9 @@ export default function Despesas() {
                   <SelectValue placeholder="Selecionar caminhão" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockCaminhoes.map(c => (
+                  {caminhoes.map(c => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.placa} - {c.modelo}
+                      {c.placa} — {c.modelo}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -288,14 +300,15 @@ export default function Despesas() {
             </div>
             <div className="space-y-2">
               <Label>Viagem relacionada (opcional)</Label>
-              <Select value={form.viagemId} onValueChange={(v) => setForm(f => ({ ...f, viagemId: v }))}>
+              <Select value={form.viagemId || 'nenhuma'} onValueChange={(v) => setForm(f => ({ ...f, viagemId: v === 'nenhuma' ? '' : v }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Nenhuma viagem específica" />
                 </SelectTrigger>
                 <SelectContent>
-                  {mockViagens.filter(v => v.status === 'concluida').map(v => (
+                  <SelectItem value="nenhuma">Nenhuma</SelectItem>
+                  {viagens.filter(v => v.status === 'concluida').map(v => (
                     <SelectItem key={v.id} value={v.id}>
-                      {v.motoristaNome} - {formatarData(v.dataInicio)}
+                      {v.motoristaNome} — {formatarData(v.dataInicio)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -304,7 +317,9 @@ export default function Despesas() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={salvar}>Registrar despesa</Button>
+            <Button onClick={salvar} disabled={salvando}>
+              {salvando ? 'Salvando...' : 'Registrar despesa'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

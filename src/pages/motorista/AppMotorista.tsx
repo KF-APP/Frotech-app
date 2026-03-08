@@ -40,8 +40,11 @@ import {
   Truck,
 } from 'lucide-react';
 import type { PontoGPS, TipoDespesa } from '../../types';
-import { formatarTempo, labelTipoDespesa } from '../../utils/formatters';
+import { formatarTempo, formatarData, formatarKm } from '../../utils/formatters';
 import { toast } from 'sonner';
+import { useViagens } from '@/hooks/useViagens';
+import { useDespesas } from '@/hooks/useDespesas';
+import { supabase } from '@/lib/supabase';
 
 type TelaMotorista = 'home' | 'viagem' | 'historico';
 
@@ -54,7 +57,7 @@ interface DespesaLocal {
 }
 
 function calcularDistancia(p1: PontoGPS, p2: PontoGPS): number {
-  const R = 6371; // km
+  const R = 6371;
   const dLat = ((p2.lat - p1.lat) * Math.PI) / 180;
   const dLon = ((p2.lng - p1.lng) * Math.PI) / 180;
   const a =
@@ -68,10 +71,11 @@ function calcularDistancia(p1: PontoGPS, p2: PontoGPS): number {
 }
 
 export default function AppMotorista() {
-  const { user, logout } = useAuth();
+  const { user, logout, motoristaId } = useAuth();
   const navigate = useNavigate();
   const [tela, setTela] = useState<TelaMotorista>('home');
   const [viagemAtiva, setViagemAtiva] = useState(false);
+  const [viagemAtivaId, setViagemAtivaId] = useState<string | null>(null);
   const [pontoGPS, setPontoGPS] = useState<PontoGPS[]>([]);
   const [kmPercorrido, setKmPercorrido] = useState(0);
   const [tempoInicio, setTempoInicio] = useState<Date | null>(null);
@@ -82,6 +86,7 @@ export default function AppMotorista() {
   const [despesas, setDespesas] = useState<DespesaLocal[]>([]);
   const [dialogDespesa, setDialogDespesa] = useState(false);
   const [dialogEncerrar, setDialogEncerrar] = useState(false);
+  const [salvandoViagem, setSalvandoViagem] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const gpsWatchRef = useRef<number | null>(null);
   const [formDespesa, setFormDespesa] = useState({
@@ -89,6 +94,40 @@ export default function AppMotorista() {
     valor: '',
     descricao: '',
   });
+
+  // Get motorista data to find caminhao
+  const [motoristaData, setMotoristaData] = useState<{ nome: string; caminhao_id: string | null; caminhao_placa: string | null } | null>(null);
+
+  useEffect(() => {
+    if (motoristaId) {
+      supabase
+        .from('motoristas')
+        .select('nome, caminhao_id')
+        .eq('id', motoristaId)
+        .single()
+        .then(async ({ data }) => {
+          if (data) {
+            let placa: string | null = null;
+            if (data.caminhao_id) {
+              const { data: cam } = await supabase
+                .from('caminhoes')
+                .select('placa')
+                .eq('id', data.caminhao_id)
+                .single();
+              placa = cam?.placa || null;
+            }
+            setMotoristaData({
+              nome: data.nome,
+              caminhao_id: data.caminhao_id,
+              caminhao_placa: placa,
+            });
+          }
+        });
+    }
+  }, [motoristaId]);
+
+  const { viagens, iniciarViagem: iniciarViagemBanco, finalizarViagem, salvarPontoGPS } = useViagens(motoristaId);
+  const { criarDespesa } = useDespesas();
 
   // Timer da viagem
   useEffect(() => {
@@ -102,7 +141,7 @@ export default function AppMotorista() {
     }
   }, [viagemAtiva, tempoInicio]);
 
-  const iniciarGPS = () => {
+  const iniciarGPS = (viagemId: string) => {
     if (!navigator.geolocation) {
       setGpsErro('GPS não disponível neste dispositivo');
       return;
@@ -130,6 +169,15 @@ export default function AppMotorista() {
           }
           return novo;
         });
+
+        // Save GPS point to database every 5 points
+        salvarPontoGPS(
+          viagemId,
+          pos.coords.latitude,
+          pos.coords.longitude,
+          pos.coords.speed ? Math.round(pos.coords.speed * 3.6) : undefined,
+          pos.coords.accuracy
+        );
       },
       (err) => {
         setGpsErro(`Erro GPS: ${err.message}`);
@@ -143,30 +191,74 @@ export default function AppMotorista() {
     );
   };
 
-  const iniciarViagem = () => {
-    setViagemAtiva(true);
-    setTempoInicio(new Date());
-    setTempoDecorrido(0);
-    setKmPercorrido(0);
-    setPontoGPS([]);
-    setDespesas([]);
-    iniciarGPS();
-    setTela('viagem');
-    toast.success('Viagem iniciada! GPS ativado.');
+  const handleIniciarViagem = async () => {
+    if (!motoristaId || !user) {
+      toast.error('Dados do motorista não encontrados');
+      return;
+    }
+
+    if (!motoristaData?.caminhao_id) {
+      toast.error('Você não tem um caminhão associado. Fale com o administrador.');
+      return;
+    }
+
+    const result = await iniciarViagemBanco({
+      motoristaId,
+      motoristaNome: user.nome,
+      caminhaoId: motoristaData.caminhao_id,
+      caminhaoPlaca: motoristaData.caminhao_placa || '',
+    });
+
+    if (result.success && result.viagemId) {
+      setViagemAtivaId(result.viagemId);
+      setViagemAtiva(true);
+      setTempoInicio(new Date());
+      setTempoDecorrido(0);
+      setKmPercorrido(0);
+      setPontoGPS([]);
+      setDespesas([]);
+      iniciarGPS(result.viagemId);
+      setTela('viagem');
+    }
   };
 
-  const encerrarViagem = () => {
+  const handleEncerrarViagem = async () => {
+    if (!viagemAtivaId) return;
+
+    setSalvandoViagem(true);
+
     if (gpsWatchRef.current !== null) {
       navigator.geolocation.clearWatch(gpsWatchRef.current);
     }
     if (intervalRef.current) clearInterval(intervalRef.current);
+
+    const kmFinal = Math.max(kmPercorrido, 0);
+
+    await finalizarViagem(viagemAtivaId, {
+      kmTotal: kmFinal,
+      tempoTotal: tempoDecorrido,
+    });
+
+    // Save all local despesas to database
+    for (const d of despesas) {
+      await criarDespesa({
+        tipoDespesa: d.tipoDespesa,
+        valor: d.valor,
+        descricao: d.descricao,
+        data: d.data,
+        caminhaoId: motoristaData?.caminhao_id || undefined,
+        viagemId: viagemAtivaId,
+        criadoPor: 'motorista',
+      });
+    }
+
     setViagemAtiva(false);
+    setViagemAtivaId(null);
     setGpsAtivo(false);
     setDialogEncerrar(false);
+    setSalvandoViagem(false);
 
-    const kmFinal = Math.max(kmPercorrido, pontoGPS.length * 0.5);
-
-    toast.success(`Viagem encerrada! ${kmFinal.toFixed(1)} km percorridos em ${formatarTempo(tempoDecorrido)}`);
+    toast.success(`Viagem salva! ${kmFinal.toFixed(1)} km percorridos em ${formatarTempo(tempoDecorrido)}`);
     setTela('home');
   };
 
@@ -185,7 +277,7 @@ export default function AppMotorista() {
     };
 
     setDespesas(prev => [...prev, nova]);
-    toast.success('Despesa registrada!');
+    toast.success('Despesa registrada! Será salva ao encerrar a viagem.');
     setDialogDespesa(false);
     setFormDespesa({ tipoDespesa: '', valor: '', descricao: '' });
   };
@@ -200,6 +292,8 @@ export default function AppMotorista() {
     ? Math.round(localizacaoAtual.coords.speed * 3.6)
     : 0;
 
+  const historico = viagens.filter(v => v.status === 'concluida');
+
   return (
     <div className="min-h-screen bg-background flex flex-col max-w-sm mx-auto">
       {/* Header */}
@@ -209,7 +303,10 @@ export default function AppMotorista() {
         </div>
         <div className="flex-1">
           <p className="font-bold text-sm">FrotaTech</p>
-          <p className="text-xs text-sidebar-foreground/70">Olá, {user?.nome.split(' ')[0]}</p>
+          <p className="text-xs text-sidebar-foreground/70">
+            Olá, {user?.nome.split(' ')[0]}
+            {motoristaData?.caminhao_placa && ` · ${motoristaData.caminhao_placa}`}
+          </p>
         </div>
         {viagemAtiva && (
           <Badge className="bg-green-500/20 text-green-300 border-green-500/30 text-xs animate-pulse">
@@ -226,7 +323,7 @@ export default function AppMotorista() {
         {[
           { id: 'home', icon: Navigation, label: 'Início' },
           { id: 'viagem', icon: Route, label: 'Viagem', disabled: !viagemAtiva },
-          { id: 'historico', icon: History, label: 'Histórico' },
+          { id: 'historico', icon: History, label: 'Hist��rico' },
         ].map(tab => (
           <button
             key={tab.id}
@@ -260,15 +357,26 @@ export default function AppMotorista() {
                   <p className="text-muted-foreground text-sm mt-1">Inicie uma nova viagem para registrar sua rota</p>
                 </div>
 
+                {!motoristaData?.caminhao_id && (
+                  <Card className="border-yellow-500/30 bg-yellow-500/5">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-yellow-600" />
+                        <p className="text-xs text-yellow-700">Você não tem caminhão associado. Fale com o administrador.</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <Button
                   className="w-full h-16 text-lg font-bold"
-                  onClick={iniciarViagem}
+                  onClick={handleIniciarViagem}
+                  disabled={!motoristaData?.caminhao_id}
                 >
                   <Play className="w-6 h-6 mr-3" />
                   INICIAR VIAGEM
                 </Button>
 
-                {/* Info status GPS */}
                 <Card>
                   <CardContent className="pt-4">
                     <div className="flex items-center gap-3">
@@ -304,7 +412,6 @@ export default function AppMotorista() {
                   </Card>
                 </div>
 
-                {/* GPS status */}
                 <div className={`flex items-center gap-2 p-3 rounded-lg ${gpsAtivo ? 'bg-green-500/10' : 'bg-yellow-500/10'}`}>
                   <div className={`w-2 h-2 rounded-full ${gpsAtivo ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`} />
                   <p className="text-xs">
@@ -338,7 +445,6 @@ export default function AppMotorista() {
           <div className="space-y-4">
             <h2 className="text-lg font-bold">Em Rota</h2>
 
-            {/* Métricas */}
             <div className="grid grid-cols-3 gap-2">
               <Card>
                 <CardContent className="pt-3 pb-3 text-center">
@@ -365,7 +471,6 @@ export default function AppMotorista() {
               </Card>
             </div>
 
-            {/* Mapa visual simplificado */}
             <Card>
               <CardContent className="pt-4 pb-4">
                 <div className="flex items-center justify-between mb-3">
@@ -383,22 +488,20 @@ export default function AppMotorista() {
                   </div>
                 ) : (
                   <p className="text-xs text-muted-foreground">
-                    {gpsErro || 'Aguardando localização GPS...'}
+                    {gpsErro || 'Aguardando localiza��ão GPS...'}
                   </p>
                 )}
               </CardContent>
             </Card>
 
-            {/* Botão adicionar despesa */}
             <Button className="w-full" onClick={() => setDialogDespesa(true)}>
               <Plus className="w-4 h-4 mr-2" />
               ADICIONAR DESPESA
             </Button>
 
-            {/* Lista de despesas */}
             {despesas.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium">Despesas registradas</p>
+                <p className="text-sm font-medium">Despesas desta viagem</p>
                 {despesas.map(d => (
                   <div key={d.id} className="flex items-center justify-between bg-muted/50 rounded-lg px-3 py-2">
                     <div className="flex items-center gap-2">
@@ -408,7 +511,7 @@ export default function AppMotorista() {
                       {!['combustivel', 'pedagio', 'alimentacao'].includes(d.tipoDespesa) && <DollarSign className="w-4 h-4 text-primary" />}
                       <div>
                         <p className="text-xs font-medium">{d.descricao}</p>
-                        <p className="text-xs text-muted-foreground">{labelTipoDespesa(d.tipoDespesa)}</p>
+                        <p className="text-xs text-muted-foreground">{d.tipoDespesa}</p>
                       </div>
                     </div>
                     <p className="text-sm font-bold">
@@ -434,36 +537,43 @@ export default function AppMotorista() {
         {tela === 'historico' && (
           <div className="space-y-4">
             <h2 className="text-lg font-bold">Histórico de Viagens</h2>
-            <div className="space-y-3">
-              {[
-                { data: '20/11/2024', km: 95, tempo: 390, origem: 'São Paulo', destino: 'Campinas' },
-                { data: '18/11/2024', km: 180, tempo: 480, origem: 'Campinas', destino: 'Santos' },
-                { data: '15/11/2024', km: 120, tempo: 360, origem: 'Santos', destino: 'São Paulo' },
-              ].map((v, i) => (
-                <Card key={i}>
-                  <CardContent className="pt-4 pb-4">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="flex items-center gap-2 mb-2">
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                          <span className="text-sm font-medium text-green-600">Concluída</span>
+            {historico.length === 0 ? (
+              <div className="text-center py-12">
+                <History className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">Nenhuma viagem concluída ainda</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {historico.map(v => (
+                  <Card key={v.id}>
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <div className="flex items-center gap-2 mb-2">
+                            <CheckCircle className="w-4 h-4 text-green-500" />
+                            <span className="text-sm font-medium text-green-600">Concluída</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">{formatarData(v.dataInicio)}</p>
+                          {(v.origem || v.destino) && (
+                            <p className="text-sm mt-1">
+                              {v.origem && <span className="font-medium">{v.origem}</span>}
+                              {v.origem && v.destino && <span className="text-muted-foreground"> → </span>}
+                              {v.destino && <span className="font-medium">{v.destino}</span>}
+                            </p>
+                          )}
                         </div>
-                        <p className="text-xs text-muted-foreground">{v.data}</p>
-                        <p className="text-sm mt-1">
-                          <span className="font-medium">{v.origem}</span>
-                          <span className="text-muted-foreground"> → </span>
-                          <span className="font-medium">{v.destino}</span>
-                        </p>
+                        <div className="text-right">
+                          <p className="text-lg font-bold">{v.kmTotal ? formatarKm(v.kmTotal) : '—'}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {v.tempoTotal ? formatarTempo(v.tempoTotal) : '—'}
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold">{v.km} km</p>
-                        <p className="text-xs text-muted-foreground">{formatarTempo(v.tempo)}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -508,7 +618,7 @@ export default function AppMotorista() {
                 rows={2}
               />
             </div>
-            <Button variant="outline" className="w-full" onClick={() => toast.info('Câmera não disponível na versão demo')}>
+            <Button variant="outline" className="w-full" onClick={() => toast.info('Foto do comprovante em breve')}>
               <Camera className="w-4 h-4 mr-2" />
               Tirar foto do comprovante
             </Button>
@@ -549,14 +659,16 @@ export default function AppMotorista() {
             </div>
             <div className="flex items-center gap-2 p-3 bg-yellow-500/10 rounded-lg">
               <AlertCircle className="w-4 h-4 text-yellow-600" />
-              <p className="text-xs text-yellow-700">Após encerrar, os dados serão salvos automaticamente</p>
+              <p className="text-xs text-yellow-700">Todos os dados serão salvos no sistema</p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogEncerrar(false)}>Continuar viagem</Button>
-            <Button variant="destructive" onClick={encerrarViagem}>
+            <Button variant="outline" onClick={() => setDialogEncerrar(false)} disabled={salvandoViagem}>
+              Continuar viagem
+            </Button>
+            <Button variant="destructive" onClick={handleEncerrarViagem} disabled={salvandoViagem}>
               <Square className="w-4 h-4 mr-2" />
-              Encerrar
+              {salvandoViagem ? 'Salvando...' : 'Encerrar'}
             </Button>
           </DialogFooter>
         </DialogContent>
